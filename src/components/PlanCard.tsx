@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 interface PlanCardProps {
   plan: WeekPlan
   showUser?: boolean
+  variant?: 'default' | 'content-primary'
   onView?: (plan: WeekPlan) => void
   onEdit?: (plan: WeekPlan) => void
   onDelete?: (id: string) => void
@@ -12,7 +13,7 @@ interface PlanCardProps {
   onRestore?: (id: string) => void
 }
 
-export function PlanCard({ plan, showUser = true, onView, onEdit, onDelete, onArchive, onRestore }: PlanCardProps) {
+export function PlanCard({ plan, showUser = true, variant = 'default', onView, onEdit, onDelete, onArchive, onRestore }: PlanCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -34,9 +35,18 @@ export function PlanCard({ plan, showUser = true, onView, onEdit, onDelete, onAr
               <span className="text-xs px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--status-warning)]/15 text-[var(--status-warning)]">已归档</span>
             )}
           </div>
-          <h3 className="font-semibold text-primary group-hover:text-accent transition-colors">
-            {plan.projectName}
-          </h3>
+          {variant === 'content-primary' ? (
+            <>
+              <h3 className="font-semibold text-primary group-hover:text-accent transition-colors line-clamp-2">
+                {plan.content}
+              </h3>
+              <p className="mt-1 text-sm text-secondary">{plan.projectName}</p>
+            </>
+          ) : (
+            <h3 className="font-semibold text-primary group-hover:text-accent transition-colors">
+              {plan.projectName}
+            </h3>
+          )}
         </div>
       </div>
 
@@ -54,10 +64,12 @@ export function PlanCard({ plan, showUser = true, onView, onEdit, onDelete, onAr
         </span>
       </div>
 
-      <div className="flex items-start gap-2 text-sm">
-        <FileText className="w-4 h-4 mt-0.5 flex-shrink-0 text-secondary" />
-        <p className="text-primary line-clamp-3">{plan.content}</p>
-      </div>
+      {variant !== 'content-primary' && (
+        <div className="flex items-start gap-2 text-sm">
+          <FileText className="w-4 h-4 mt-0.5 flex-shrink-0 text-secondary" />
+          <p className="text-primary line-clamp-3">{plan.content}</p>
+        </div>
+      )}
 
       {(onEdit || onDelete || onArchive || onRestore) && (
         <div className="mt-[var(--spacing-md)] pt-[var(--spacing-md)] border-t border-[var(--border)] flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

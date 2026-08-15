@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, RotateCcw } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
@@ -20,6 +20,7 @@ export function BoardPage() {
   const { currentYear, currentWeek } = useWeekStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<BoardViewMode>('user')
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({})
   const [selectedProjectId, setSelectedProjectId] = useState('all')
   const [timelineScale, setTimelineScale] = useState(1)
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
@@ -45,6 +46,10 @@ export function BoardPage() {
     queryKey: ['projects'],
     queryFn: projectApi.getAll,
   })
+
+  useEffect(() => {
+    setExpandedUsers({})
+  }, [currentYear, currentWeek, plans])
 
   const saveOrder = useMutation({
     mutationFn: weekPlanApi.saveBoardOrder,
@@ -214,17 +219,28 @@ export function BoardPage() {
             <div className="text-center py-[var(--spacing-2xl)]"><p className="text-secondary">{emptyMessage}</p></div>
           ) : viewMode === 'user' ? (
             <div className="space-y-[var(--spacing-2xl)]">
-              {plansByUser.map(([userId, userPlans]) => (
+              {plansByUser.map(([userId, userPlans]) => {
+                const isExpanded = expandedUsers[userId] === true
+                return (
                 <div key={userId} className="space-y-[var(--spacing-md)]">
-                  <div className="flex items-center gap-3 pb-[var(--spacing-sm)] border-b border-[var(--border)]">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedUsers((users) => ({ ...users, [userId]: !isExpanded }))}
+                    className="w-full flex items-center gap-3 pb-[var(--spacing-sm)] border-b border-[var(--border)] text-left"
+                    aria-expanded={isExpanded}
+                  >
                     <div className="w-2 h-8 bg-[var(--accent)] rounded-full" />
-                    <div><h3 className="font-bold text-lg">{userPlans[0].username}</h3><p className="text-sm text-secondary">{userPlans.length} 个计划</p></div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-lg)]">
-                    {userPlans.map((plan) => <PlanCard key={plan.id} plan={plan} showUser={false} onView={setViewingPlan} />)}
-                  </div>
+                    <div className="flex-1"><h3 className="font-bold text-lg">{userPlans[0].username}</h3><p className="text-sm text-secondary">{userPlans.length} 个计划 · {isExpanded ? '收起' : '展开'}</p></div>
+                    <ChevronRight className={`w-5 h-5 text-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                  </button>
+                  {isExpanded && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-lg)]">
+                      {userPlans.map((plan) => <PlanCard key={plan.id} plan={plan} showUser={false} variant="content-primary" onView={setViewingPlan} />)}
+                    </div>
+                  )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <motion.section
