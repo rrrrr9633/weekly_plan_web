@@ -148,6 +148,7 @@ export function PersonalPage() {
                   key={plan.id}
                   plan={plan}
                   showUser={false}
+                  variant="content-primary"
                   onView={setViewingPlan}
                   onEdit={plan.isAssigned ? undefined : handleEdit}
                   onDelete={plan.isAssigned ? undefined : () => handleDelete(plan.id)}
