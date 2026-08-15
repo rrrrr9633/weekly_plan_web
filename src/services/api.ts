@@ -1,0 +1,169 @@
+import { useAuthStore } from '@/store/authStore'
+import type { Project, User, WeekPlan } from '@/types'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tianxiadiyi.xyz/api'
+const TIMEOUT_MS = 10000
+const toApiWeekday = (weekday: WeekPlan['weekday']) => weekday.toUpperCase()
+
+type Query = Record<string, string | number | boolean | undefined | null>
+
+export class ApiError extends Error {
+  status: number
+  data: unknown
+
+  constructor(status: number, data: unknown, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
+  }
+}
+
+function buildUrl(path: string, params?: Query): string {
+  const url = new URL(`${API_BASE_URL}${path}`)
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value))
+    }
+  }
+  return url.toString()
+}
+
+async function request<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  options: { body?: unknown; params?: Query } = {}
+): Promise<T> {
+  const token = useAuthStore.getState().token
+
+  const response = await fetch(buildUrl(path, options.params), {
+    method,
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  })
+
+  const payload = response.status === 204 ? null : await response.json().catch(() => null)
+
+  if (!response.ok) {
+    if (response.status === 401 && token && !path.startsWith('/auth/')) {
+      useAuthStore.getState().logout()
+      window.location.href = '/login'
+    }
+    const message =
+      (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`
+    throw new ApiError(response.status, payload, message)
+  }
+
+  return payload as T
+}
+
+export const api = {
+  get: <T>(path: string, options?: { params?: Query }) =>
+    request<T>('GET', path, { params: options?.params }),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, { body }),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
+  delete: <T>(path: string) => request<T>('DELETE', path),
+}
+
+export interface AuthResponse {
+  token: string
+  user: User
+}
+
+// Auth API
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post<AuthResponse>('/auth/login', { username, password }),
+
+  register: (username: string, password: string) =>
+    api.post<AuthResponse>('/auth/register', { username, password }),
+
+  logout: () => api.post<void>('/auth/logout'),
+}
+
+// User API
+export const userApi = {
+  getAll: () => api.get<User[]>('/users'),
+  getById: (id: string) => api.get<User>(`/users/${id}`),
+  create: (data: { username: string; password: string; role: User['role'] }) =>
+    api.post<User>('/users', data),
+  update: (id: string, data: Partial<{ username: string; role: User['role'] }>) =>
+    api.put<User>(`/users/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/users/${id}`),
+}
+
+// Project API
+export const projectApi = {
+  getAll: () => api.get<Project[]>('/projects'),
+  getById: (id: string) => api.get<Project>(`/projects/${id}`),
+  create: (data: { name: string; code: string; description?: string; assistOrg?: string }) =>
+    api.post<Project>('/projects', data),
+  update: (
+    id: string,
+    data: Partial<{ name: string; description: string; status: Project['status'] }>
+  ) => api.put<Project>(`/projects/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/projects/${id}`),
+}
+
+// WeekPlan API
+export const weekPlanApi = {
+  // 获取指定周的所有计划（团队大板用）
+  getByWeek: (year: number, week: number) =>
+    api.get<WeekPlan[]>(`/plans/week/${year}/${week}`),
+
+  // 获取当前用户指定周的计划（个人视图用）
+  getMyPlans: (year: number, week: number) =>
+    api.get<WeekPlan[]>(`/plans/my/${year}/${week}`),
+
+  create: (data: {
+    projectId: string
+    year: number
+    weekNumber: number
+    weekday: WeekPlan['weekday']
+    content: string
+  }) => api.post<WeekPlan>('/plans', { ...data, weekday: toApiWeekday(data.weekday) }),
+
+  createBatch: (data: {
+    projectId: string
+    year: number
+    weekNumber: number
+    plans: Array<{ content: string; weekday: WeekPlan['weekday'] }>
+  }) => api.post<WeekPlan[]>('/plans/batch', {
+    ...data,
+    plans: data.plans.map((plan) => ({ ...plan, weekday: toApiWeekday(plan.weekday) })),
+  }),
+
+  update: (id: string, data: { content: string; weekday: WeekPlan['weekday'] }) =>
+    api.put<WeekPlan>(`/plans/${id}`, { ...data, weekday: toApiWeekday(data.weekday) }),
+
+  delete: (id: string) => api.delete<void>(`/plans/${id}`),
+
+  getArchived: () => api.get<WeekPlan[]>('/plans/archived'),
+
+  archive: (id: string) => api.put<WeekPlan>(`/plans/${id}/archive`),
+
+  restore: (id: string) => api.put<WeekPlan>(`/plans/${id}/restore`),
+
+  saveBoardOrder: (data: { projectId: string; year: number; weekNumber: number; weekday: WeekPlan['weekday']; planIds: string[] }) =>
+    api.put<WeekPlan[]>('/plans/board/order', { ...data, weekday: toApiWeekday(data.weekday), planIds: data.planIds.map(Number) }),
+
+  restoreBoardOrder: (data: { projectId: string; year: number; weekNumber: number; weekday: WeekPlan['weekday'] }) =>
+    api.delete<void>(`/plans/board/order?${new URLSearchParams({ projectId: data.projectId, year: String(data.year), weekNumber: String(data.weekNumber), weekday: toApiWeekday(data.weekday) }).toString()}`),
+
+  // 管理员分配计划
+  assign: (data: {
+    projectId: string
+    userId: string
+    year: number
+    weekNumber: number
+    weekday: WeekPlan['weekday']
+    content: string
+  }) => api.post<WeekPlan>('/plans/assign', { ...data, weekday: toApiWeekday(data.weekday) }),
+
+  search: (query: string, year?: number, week?: number) =>
+    api.get<WeekPlan[]>('/plans/search', { params: { query, year, week } }),
+}
