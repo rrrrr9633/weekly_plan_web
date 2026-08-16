@@ -1,6 +1,7 @@
 export interface User {
   id: string
   username: string
+  displayName?: string
   role: 'admin' | 'user'
   createdAt: string
 }
@@ -43,6 +44,7 @@ export interface WeekPlan {
   projectCode: string
   userId: string
   username: string
+  displayName?: string
   year: number
   weekNumber: number
   weekday: PlanWeekday

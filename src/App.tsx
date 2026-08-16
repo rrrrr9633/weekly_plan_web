@@ -10,6 +10,7 @@ import { BoardPage } from '@/pages/BoardPage'
 import { UserManagementPage } from '@/pages/UserManagementPage'
 import { ProjectManagementPage } from '@/pages/ProjectManagementPage'
 import { ArchivedPlansPage } from '@/pages/ArchivedPlansPage'
+import { ProfilePage } from '@/pages/ProfilePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,14 @@ function AppRoutes() {
               <PublicOnlyRoute>
                 <LoginPage />
               </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
             }
           />
           <Route

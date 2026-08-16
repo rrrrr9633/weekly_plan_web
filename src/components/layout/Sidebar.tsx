@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Calendar, Users, Settings, Archive, LogOut } from 'lucide-react'
+import { Home, Calendar, Users, Settings, Archive, LogOut, UserRound } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +8,7 @@ export function Sidebar() {
   const { user, isAdmin, logout } = useAuthStore()
 
   const navigation = [
+    { name: '个人信息', href: '/profile', icon: UserRound, adminOnly: false },
     { name: '个人计划', href: '/personal', icon: Calendar, adminOnly: false },
     { name: '团队大板', href: '/board', icon: Home, adminOnly: false },
     { name: '用户管理', href: '/admin/users', icon: Users, adminOnly: true },

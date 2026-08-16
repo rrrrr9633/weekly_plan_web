@@ -39,7 +39,7 @@ export function PlanDetailModal({ plan, onClose }: PlanDetailModalProps) {
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-[var(--spacing-md)] text-sm">
             <div className="surface-3 rounded-[var(--radius-md)] p-[var(--spacing-md)]">
               <dt className="flex items-center gap-2 text-secondary"><User className="w-4 h-4" />负责人</dt>
-              <dd className="mt-2 font-medium">{plan.username}</dd>
+              <dd className="mt-2 font-medium">{plan.displayName || plan.username}</dd>
             </div>
             <div className="surface-3 rounded-[var(--radius-md)] p-[var(--spacing-md)]">
               <dt className="flex items-center gap-2 text-secondary"><Calendar className="w-4 h-4" />时间范围</dt>

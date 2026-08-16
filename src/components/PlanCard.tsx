@@ -53,7 +53,7 @@ export function PlanCard({ plan, showUser = true, variant = 'default', onView, o
       {showUser && (
         <div className="flex items-center gap-2 text-sm text-secondary mb-[var(--spacing-sm)]">
           <User className="w-4 h-4" />
-          <span>{plan.username}</span>
+          <span>{plan.displayName || plan.username}</span>
         </div>
       )}
 

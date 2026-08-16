@@ -88,6 +88,10 @@ export const authApi = {
 // User API
 export const userApi = {
   getAll: () => api.get<User[]>('/users'),
+  getMe: () => api.get<User>('/users/me'),
+  updateMyProfile: (displayName: string) => api.put<User>('/users/me', { displayName }),
+  updateMyPassword: (currentPassword: string, newPassword: string) =>
+    api.put<void>('/users/me/password', { currentPassword, newPassword }),
   getById: (id: string) => api.get<User>(`/users/${id}`),
   create: (data: { username: string; password: string; role: User['role'] }) =>
     api.post<User>('/users', data),

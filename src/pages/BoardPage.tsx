@@ -76,7 +76,7 @@ export function BoardPage() {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return plans
     return plans.filter((plan) =>
-      plan.username.toLowerCase().includes(query) ||
+      (plan.displayName || plan.username).toLowerCase().includes(query) ||
       plan.projectName.toLowerCase().includes(query) ||
       plan.projectCode.toLowerCase().includes(query) ||
       plan.content.toLowerCase().includes(query)
@@ -230,7 +230,7 @@ export function BoardPage() {
                     aria-expanded={isExpanded}
                   >
                     <div className="w-2 h-8 bg-[var(--accent)] rounded-full" />
-                    <div className="flex-1"><h3 className="font-bold text-lg">{userPlans[0].username}</h3><p className="text-sm text-secondary">{userPlans.length} 个计划 · {isExpanded ? '收起' : '展开'}</p></div>
+                    <div className="flex-1"><h3 className="font-bold text-lg">{userPlans[0].displayName || userPlans[0].username}</h3><p className="text-sm text-secondary">{userPlans.length} 个计划 · {isExpanded ? '收起' : '展开'}</p></div>
                     <ChevronRight className={`w-5 h-5 text-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
                   {isExpanded && (
@@ -327,7 +327,7 @@ export function BoardPage() {
                             <span className="timeline-bubble-project">{plan.projectCode}</span>
                             <strong className="timeline-bubble-content">{plan.content}</strong>
                             <span className="timeline-bubble-project-name">{plan.projectName}</span>
-                            <span className="timeline-bubble-user">{plan.username}</span>
+                            <span className="timeline-bubble-user">{plan.displayName || plan.username}</span>
                             {plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
                           </motion.button>
                         )) : <span className="timeline-empty">暂无计划</span>}
@@ -351,7 +351,7 @@ export function BoardPage() {
                   <span className="timeline-bubble-project">{dragGhost.plan.projectCode}</span>
                   <strong className="timeline-bubble-content">{dragGhost.plan.content}</strong>
                   <span className="timeline-bubble-project-name">{dragGhost.plan.projectName}</span>
-                  <span className="timeline-bubble-user">{dragGhost.plan.username}</span>
+                  <span className="timeline-bubble-user">{dragGhost.plan.displayName || dragGhost.plan.username}</span>
                   {dragGhost.plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
                 </div>
               )}
