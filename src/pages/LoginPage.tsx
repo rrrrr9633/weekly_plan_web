@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LogIn, UserPlus } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
@@ -8,12 +8,16 @@ import { getRoleHomePath } from '@/lib/auth'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { setAuth } = useAuthStore()
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const sessionError = searchParams.get('reason') === 'session-invalid'
+    ? '登录后会话校验失败，请确认线上后端和前端使用的是同一版本。'
+    : ''
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,9 +108,9 @@ export function LoginPage() {
               {!isLogin && <p className="mt-2 text-xs text-secondary">密码长度为 8–72 位</p>}
             </div>
 
-            {error && (
+            {(error || sessionError) && (
               <div className="text-sm text-[var(--status-error)] bg-[var(--status-error)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] rounded-[var(--radius-md)]">
-                {error}
+                {error || sessionError}
               </div>
             )}
 

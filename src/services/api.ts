@@ -51,7 +51,7 @@ async function request<T>(
   if (!response.ok) {
     if (response.status === 401 && token && !path.startsWith('/auth/')) {
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      window.location.assign('/login?reason=session-invalid')
     }
     const message =
       (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`
