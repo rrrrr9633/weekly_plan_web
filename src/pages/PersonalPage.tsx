@@ -3,13 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Loader2 } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
-import { PlanCard } from '@/components/PlanCard'
+import { ProjectTimeline } from '@/components/ProjectTimeline'
 import { PlanModal } from '@/components/PlanModal'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
 import { useWeekStore } from '@/store/weekStore'
 import { weekPlanApi, projectApi, ApiError } from '@/services/api'
 import type { WeekPlan } from '@/types'
-import { sortPlansByWeekday } from '@/lib/planSort'
 
 export function PersonalPage() {
   const queryClient = useQueryClient()
@@ -104,8 +103,6 @@ export function PersonalPage() {
     setIsModalOpen(true)
   }
 
-  const orderedPlans = sortPlansByWeekday(plans)
-
   return (
     <PageTransition>
       <div className="min-h-screen ml-64 p-[var(--spacing-2xl)]">
@@ -135,27 +132,21 @@ export function PersonalPage() {
             <div className="flex items-center justify-center py-[var(--spacing-2xl)]">
               <Loader2 className="w-8 h-8 animate-spin text-accent" />
             </div>
-          ) : orderedPlans.length === 0 ? (
+          ) : plans.length === 0 ? (
             <div className="text-center py-[var(--spacing-2xl)]">
               <p className="text-secondary mb-[var(--spacing-lg)]">
                 本周还没有计划，点击上方按钮添加
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-lg)]">
-              {orderedPlans.map((plan: WeekPlan) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  showUser={false}
-                  variant="content-primary"
-                  onView={setViewingPlan}
-                  onEdit={plan.isAssigned ? undefined : handleEdit}
-                  onDelete={plan.isAssigned ? undefined : () => handleDelete(plan.id)}
-                  onArchive={plan.isAssigned ? undefined : handleArchive}
-                />
-              ))}
-            </div>
+            <ProjectTimeline
+              plans={plans}
+              showUser={false}
+              onView={setViewingPlan}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onArchive={handleArchive}
+            />
           )}
         </div>
       </div>

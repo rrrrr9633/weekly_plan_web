@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, RotateCcw } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
-import { PlanCard } from '@/components/PlanCard'
+import { ProjectTimeline } from '@/components/ProjectTimeline'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
 import { useWeekStore } from '@/store/weekStore'
 import { projectApi, weekPlanApi } from '@/services/api'
@@ -234,9 +234,7 @@ export function BoardPage() {
                     <ChevronRight className={`w-5 h-5 text-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
                   {isExpanded && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-lg)]">
-                      {userPlans.map((plan) => <PlanCard key={plan.id} plan={plan} showUser={false} variant="content-primary" onView={setViewingPlan} />)}
-                    </div>
+                    <ProjectTimeline plans={userPlans} onView={setViewingPlan} />
                   )}
                 </div>
                 )

@@ -465,6 +465,30 @@
     transform: translateY(0);
   }
 
+  .timeline-bubble-static {
+    cursor: pointer;
+  }
+
+  .timeline-bubble-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+  }
+
+  .timeline-bubble-actions button {
+    border-radius: 999px;
+    background: rgb(15 118 110 / 0.1);
+    padding: 0.2rem 0.5rem;
+    color: var(--accent);
+    font-size: 0.7rem;
+  }
+
+  .timeline-bubble-actions button:hover {
+    background: var(--accent);
+    color: white;
+  }
+
   .page-transition-exit-active {
     opacity: 0;
     transform: translateY(-20px);
