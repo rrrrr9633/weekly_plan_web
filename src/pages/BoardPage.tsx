@@ -29,7 +29,7 @@ export function BoardPage() {
   const [viewMode, setViewMode] = useState<BoardViewMode>('user')
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({})
   const [selectedProjectId, setSelectedProjectId] = useState('all')
-  const [timelineScale, setTimelineScale] = useState(1)
+  const [timelineScale, setTimelineScale] = useState(0.65)
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
   const pinchPointers = useRef(new Map<number, { x: number; y: number }>())
   const pinchDistance = useRef<number | undefined>(undefined)
@@ -325,7 +325,7 @@ export function BoardPage() {
                   <button type="button" onClick={() => setTimelineScale((scale) => Math.min(1.25, Number((scale + 0.15).toFixed(2))))} disabled={timelineScale >= 1.25} className="timeline-zoom-button" title="放大细节">
                     <ZoomIn className="w-4 h-4" />
                   </button>
-                  <button type="button" onClick={() => setTimelineScale(1)} className="timeline-reset-button" title="重置缩放">100%</button>
+                  <button type="button" onClick={() => setTimelineScale(0.65)} className="timeline-reset-button" title="恢复默认缩放">65%</button>
                   {!isSuperAdmin && selectedProjectId !== 'all' && (
                     <button type="button" onClick={restoreAllDays} className="timeline-reset-button" title="恢复当前项目的默认排序">
                       <RotateCcw className="w-3.5 h-3.5" />恢复排序

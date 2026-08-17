@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronRight, Maximize2, X } from 'lucide-react'
+import { ChevronRight, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { sortPlansByWeekday } from '@/lib/planSort'
 import { PLAN_WEEKDAY_OPTIONS, type PlanWeekday, type WeekPlan } from '@/types'
 
@@ -15,16 +15,30 @@ const weekdayLabels = Object.fromEntries(PLAN_WEEKDAY_OPTIONS.map(({ value, labe
 
 export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimelineProps) {
   const [expandedDay, setExpandedDay] = useState<PlanWeekday | null>(null)
+  const [timelineScale, setTimelineScale] = useState(0.65)
   const plansByWeekday = timelineDays.reduce<Record<PlanWeekday, WeekPlan[]>>(
     (groups, weekday) => ({ ...groups, [weekday]: sortPlansByWeekday(plans.filter((plan) => plan.weekday === weekday)) }),
     { pending: [], monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] }
   )
 
   return (
-    <section className="timeline-shell" aria-label="项目计划时间流">
+    <section className="timeline-shell project-timeline-shell" aria-label="项目计划时间流">
+      <div className="timeline-toolbar">
+        <p className="text-sm text-secondary">缩放时间流</p>
+        <div className="ml-auto flex shrink-0 items-center gap-2" aria-label="缩放时间流">
+          <button type="button" onClick={() => setTimelineScale((scale) => Math.max(0.65, Number((scale - 0.15).toFixed(2))))} disabled={timelineScale <= 0.65} className="timeline-zoom-button" title="缩小总览" aria-label="缩小总览">
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <span className="w-10 text-center text-xs text-secondary">{Math.round(timelineScale * 100)}%</span>
+          <button type="button" onClick={() => setTimelineScale((scale) => Math.min(1.25, Number((scale + 0.15).toFixed(2))))} disabled={timelineScale >= 1.25} className="timeline-zoom-button" title="放大细节" aria-label="放大细节">
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button type="button" onClick={() => setTimelineScale(0.65)} className="timeline-reset-button" title="恢复默认缩放">65%</button>
+        </div>
+      </div>
       <div className="timeline-scroll-shell">
         <div className="timeline-viewport">
-          <div className="timeline-canvas" style={{ '--timeline-scale': 1 } as CSSProperties}>
+          <div className="timeline-canvas" style={{ '--timeline-scale': timelineScale } as CSSProperties}>
           {timelineDays.map((weekday, index) => (
             <div className="timeline-day" key={weekday}>
               <div className="timeline-day-header">

@@ -605,6 +605,27 @@
     white-space: nowrap;
   }
 
+  .timeline-fullscreen-bubble.timeline-bubble-archived {
+    border-color: #c7cdd3;
+    background: #e4e7ea;
+    box-shadow: none;
+    color: #68737d;
+    filter: grayscale(1);
+    opacity: 0.72;
+  }
+
+  .timeline-fullscreen-bubble.timeline-bubble-archived strong,
+  .timeline-fullscreen-bubble.timeline-bubble-archived > span:not(.timeline-bubble-project),
+  .timeline-fullscreen-bubble.timeline-bubble-archived em {
+    color: #68737d;
+  }
+
+  .timeline-fullscreen-bubble.timeline-bubble-archived:hover {
+    background: #e4e7ea;
+    box-shadow: none;
+    transform: none;
+  }
+
   @media (max-width: 640px) {
     .timeline-fullscreen-header, .timeline-fullscreen-bubbles { padding: 1rem; }
     .timeline-fullscreen-bubbles { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
