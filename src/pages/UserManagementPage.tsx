@@ -278,6 +278,7 @@ function UserModal({
   const [username, setUsername] = useState(editingUser?.username || '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState(editingUser?.role || 'user')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const createMutation = useMutation({
     mutationFn: (data: { username: string; password: string; role: User['role'] }) =>
@@ -286,6 +287,7 @@ function UserModal({
       queryClient.invalidateQueries({ queryKey: ['users'] })
       onClose()
     },
+    onError: (error: Error) => setFormError(error.message),
   })
 
   const updateMutation = useMutation({
@@ -299,6 +301,7 @@ function UserModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setFormError(null)
     if (editingUser) {
       updateMutation.mutate({ id: editingUser.id, data: { username, role } })
     } else {
@@ -320,6 +323,11 @@ function UserModal({
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-[var(--spacing-lg)]">
+          {formError && (
+            <p role="alert" className="rounded-[var(--radius-md)] border border-[var(--status-error)]/40 bg-[var(--status-error)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] text-sm text-[var(--status-error)]">
+              {formError}
+            </p>
+          )}
           <div>
             <label className="block text-sm font-medium mb-2">用户名</label>
             <input
