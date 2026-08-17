@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, RotateCcw, Maximize2, X } from 'lucide-react'
+import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, ChevronUp, ChevronDown, RotateCcw, Maximize2, X } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
 import { ProjectTimeline } from '@/components/ProjectTimeline'
@@ -31,14 +31,6 @@ export function BoardPage() {
   const [selectedProjectId, setSelectedProjectId] = useState('all')
   const [timelineScale, setTimelineScale] = useState(1)
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
-  const [dropTargetId, setDropTargetId] = useState<string | undefined>(undefined)
-  const [dragGhost, setDragGhost] = useState<{ plan: WeekPlan; x: number; y: number } | undefined>(undefined)
-  const dragPlanId = useRef<string | undefined>(undefined)
-  const dragWeekday = useRef<PlanWeekday | undefined>(undefined)
-  const dragInitialOrder = useRef<string[]>([])
-  const dragStartPoint = useRef<{ x: number; y: number } | undefined>(undefined)
-  const dragDidMove = useRef(false)
-  const suppressDetailUntil = useRef(0)
   const pinchPointers = useRef(new Map<number, { x: number; y: number }>())
   const pinchDistance = useRef<number | undefined>(undefined)
   const pinchBaseScale = useRef(1)
@@ -67,20 +59,20 @@ export function BoardPage() {
     mutationFn: weekPlanApi.saveBoardOrder,
     onSuccess: (updatedPlans) => {
       setManualOrders({})
-      queryClient.setQueryData<WeekPlan[]>(['weekPlans', currentYear, currentWeek], (cached = []) =>
+      queryClient.setQueryData<WeekPlan[]>(['weekPlans', currentYear, currentWeek, companyId], (cached = []) =>
         cached.map((plan) => updatedPlans.find((updated) => updated.id === plan.id) ?? plan)
       )
     },
     onError: () => {
       setManualOrders({})
-      queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek] })
+      queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek, companyId] })
     },
   })
   const restoreOrder = useMutation({
     mutationFn: weekPlanApi.restoreBoardOrder,
     onSuccess: () => {
       setManualOrders({})
-      queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek] })
+      queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek, companyId] })
     },
   })
   const updatePlan = useMutation({
@@ -150,38 +142,29 @@ export function BoardPage() {
     return [...dayPlans].sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id))
   }
 
-  const previewDropTarget = (weekday: PlanWeekday, clientX: number, clientY: number) => {
-    if (!dragPlanId.current || dragWeekday.current !== weekday || !dragDidMove.current) return
-    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-plan-id]')
-    const targetId = target?.dataset.planId
-    setDropTargetId(targetId && targetId !== dragPlanId.current ? targetId : undefined)
+  const saveDayOrder = (weekday: PlanWeekday, planIds: string[]) => {
+    if (selectedProjectId === 'all') return
+    const orderKey = `${selectedProjectId}:${weekday}`
+    setManualOrders((orders) => ({ ...orders, [orderKey]: planIds }))
+    saveOrder.mutate({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday, planIds })
   }
 
-  const finishDrag = (weekday: PlanWeekday, clientX: number, clientY: number) => {
-    const sourceId = dragPlanId.current
-    const didMove = dragDidMove.current
-    const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-plan-id]')
-    const targetId = target?.dataset.planId
-    const initialOrder = dragInitialOrder.current
-    dragPlanId.current = undefined
-    dragWeekday.current = undefined
-    dragStartPoint.current = undefined
-    dragDidMove.current = false
-    dragInitialOrder.current = []
-    setDragGhost(undefined)
-    setDropTargetId(undefined)
-    if (!didMove || !sourceId || !target || !targetId || targetId === sourceId || selectedProjectId === 'all') return
+  const movePlan = (weekday: PlanWeekday, planId: string, offset: -1 | 1) => {
+    const planIds = orderedDayPlans(weekday).map((plan) => plan.id)
+    const currentIndex = planIds.indexOf(planId)
+    const targetIndex = currentIndex + offset
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= planIds.length) return
+    const nextPlanIds = [...planIds]
+    ;[nextPlanIds[currentIndex], nextPlanIds[targetIndex]] = [nextPlanIds[targetIndex], nextPlanIds[currentIndex]]
+    saveDayOrder(weekday, nextPlanIds)
+  }
 
-    const targetIndex = initialOrder.indexOf(targetId)
-    if (targetIndex < 0) return
-    const next = initialOrder.filter((id) => id !== sourceId)
-    const insertAfterTarget = clientY > target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2
-    const targetIndexAfterRemoval = next.indexOf(targetId)
-    next.splice(targetIndexAfterRemoval + (insertAfterTarget ? 1 : 0), 0, sourceId)
-    const orderKey = `${selectedProjectId}:${weekday}`
-    setManualOrders((orders) => ({ ...orders, [orderKey]: next }))
-    suppressDetailUntil.current = Date.now() + 250
-    saveOrder.mutate({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday, planIds: next })
+  const movePlanToPosition = (plan: WeekPlan, requestedPosition: number) => {
+    const dayPlans = orderedDayPlans(plan.weekday)
+    const planIds = dayPlans.filter((item) => item.id !== plan.id).map((item) => item.id)
+    const position = Math.max(1, Math.min(Math.trunc(requestedPosition) || 1, planIds.length + 1))
+    planIds.splice(position - 1, 0, plan.id)
+    saveDayOrder(plan.weekday, planIds)
   }
 
   const trackPinch = (event: PointerEvent<HTMLDivElement>) => {
@@ -210,11 +193,11 @@ export function BoardPage() {
     if (selectedProjectId === 'all') return
     await Promise.all(timelineDays.map((weekday) => weekPlanApi.restoreBoardOrder({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday })))
     setManualOrders({})
-    queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek] })
+    queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek, companyId] })
   }
 
-  const canManageAssignedPlan = (plan: WeekPlan) =>
-    !isSuperAdmin && plan.isAssigned && plan.assignedByUserId === currentUser?.id
+  const canManagePlan = (plan: WeekPlan) =>
+    !isSuperAdmin && (plan.userId === currentUser?.id || (plan.isAssigned && plan.assignedByUserId === currentUser?.id))
 
   const editAssignedPlan = (plan: WeekPlan) => {
     setViewingPlan(undefined)
@@ -242,23 +225,19 @@ export function BoardPage() {
             <p className="text-secondary">查看所有成员的周计划</p>
           </div>
 
-          <div className="flex flex-col xl:flex-row xl:items-center gap-[var(--spacing-lg)] mb-[var(--spacing-2xl)]">
-            <WeekSelector />
-            <div className="flex rounded-[var(--radius-full)] surface-3 p-1 w-fit">
-              <button type="button" onClick={() => setViewMode('user')} className={`px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'user' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
+          <div className="flex flex-nowrap items-center gap-[var(--spacing-lg)] mb-[var(--spacing-2xl)] overflow-x-auto pb-1">
+            <div className="shrink-0 [&_button]:shrink-0 [&_button]:whitespace-nowrap">
+              <WeekSelector />
+            </div>
+            <div className="flex shrink-0 rounded-[var(--radius-full)] surface-3 p-1">
+              <button type="button" onClick={() => setViewMode('user')} className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'user' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
                 <Users className="w-4 h-4" />按人员
               </button>
-              <button type="button" onClick={() => { setViewMode('project'); if (selectedProjectId === 'all' && projects[0]) setSelectedProjectId(projects[0].id) }} className={`px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'project' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
+              <button type="button" onClick={() => { setViewMode('project'); if (selectedProjectId === 'all' && projects[0]) setSelectedProjectId(projects[0].id) }} className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'project' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
                 <FolderKanban className="w-4 h-4" />按项目
               </button>
             </div>
-            {viewMode === 'project' && (
-              <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} className="px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-full)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors">
-                <option value="all">全部项目</option>
-                {projects.map((project) => <option key={project.id} value={project.id}>[{project.code}] {project.name}</option>)}
-              </select>
-            )}
-            <div className="flex-1 max-w-md">
+            <div className="min-w-64 flex-1 basis-72 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary" />
                 <input type="text" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索用户、项目、内容..." className="w-full pl-10 pr-4 py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-full)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors" />
@@ -309,7 +288,17 @@ export function BoardPage() {
                   <p className="timeline-kicker">项目时间流</p>
                   <p className="text-sm text-secondary">待定优先，其余计划按周内日期向右推进</p>
                 </div>
-                <div className="flex items-center gap-2" aria-label="缩放时间流">
+                <div className="ml-auto flex min-w-0 items-center gap-2">
+                  <select
+                    value={selectedProjectId}
+                    onChange={(event) => setSelectedProjectId(event.target.value)}
+                    aria-label="选择项目"
+                    className="w-80 max-w-[32vw] truncate px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-full)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors"
+                  >
+                    <option value="all">全部项目</option>
+                    {projects.map((project) => <option key={project.id} value={project.id}>[{project.code}] {project.name}</option>)}
+                  </select>
+                  <div className="flex shrink-0 items-center gap-2" aria-label="缩放时间流">
                   <button type="button" onClick={() => setTimelineScale((scale) => Math.max(0.65, Number((scale - 0.15).toFixed(2))))} disabled={timelineScale <= 0.65} className="timeline-zoom-button" title="缩小总览">
                     <ZoomOut className="w-4 h-4" />
                   </button>
@@ -325,7 +314,15 @@ export function BoardPage() {
                   )}
                 </div>
               </div>
-              <div className="timeline-viewport" onPointerDown={trackPinch} onPointerMove={updatePinch} onPointerUp={releasePointer} onPointerCancel={releasePointer}>
+            </div>
+              <div className="timeline-scroll-shell">
+                <div
+                  className="timeline-viewport"
+                  onPointerDown={trackPinch}
+                  onPointerMove={updatePinch}
+                  onPointerUp={releasePointer}
+                  onPointerCancel={releasePointer}
+                >
                 <div className="timeline-canvas" style={{ '--timeline-scale': timelineScale } as CSSProperties}>
                   {timelineDays.map((weekday, index) => (
                     <div className="timeline-day" key={weekday}>
@@ -344,47 +341,29 @@ export function BoardPage() {
                       </div>
                       <div className="timeline-bubbles">
                         {plansByWeekday[weekday].length > 0 ? orderedDayPlans(weekday).map((plan) => (
-                          <motion.button
+                          <motion.article
                             layout="position"
                             transition={{ layout: { duration: 0.24, ease: 'easeOut' } }}
-                            type="button"
                             key={plan.id}
-                            data-plan-id={plan.id}
-                            onClick={() => { if (Date.now() >= suppressDetailUntil.current) setViewingPlan(plan) }}
-                            onPointerDown={(event) => {
-                              if (isSuperAdmin || selectedProjectId === 'all' || (event.pointerType === 'touch' && pinchPointers.current.size > 1)) return
-                              dragPlanId.current = plan.id
-                              dragWeekday.current = weekday
-                              dragInitialOrder.current = orderedDayPlans(weekday).map((item) => item.id)
-                              dragStartPoint.current = { x: event.clientX, y: event.clientY }
-                              dragDidMove.current = false
-                              event.currentTarget.setPointerCapture(event.pointerId)
-                            }}
-                            onPointerMove={(event) => {
-                              if (!dragPlanId.current || !dragStartPoint.current) return
-                              const distance = Math.hypot(event.clientX - dragStartPoint.current.x, event.clientY - dragStartPoint.current.y)
-                              if (distance < 2) return
-                              dragDidMove.current = true
-                              setDragGhost({ plan, x: event.clientX, y: event.clientY })
-                              previewDropTarget(weekday, event.clientX, event.clientY)
-                            }}
-                            onPointerUp={(event) => finishDrag(weekday, event.clientX, event.clientY)}
-                            onPointerCancel={() => {
-                              dragPlanId.current = undefined
-                              dragWeekday.current = undefined
-                              dragStartPoint.current = undefined
-                              dragDidMove.current = false
-                              dragInitialOrder.current = []
-                              setDragGhost(undefined)
-                              setDropTargetId(undefined)
-                            }}
-                            className={`timeline-bubble ${!isSuperAdmin && selectedProjectId !== 'all' ? 'timeline-bubble-draggable' : ''} ${dragGhost?.plan.id === plan.id ? 'timeline-bubble-drag-source' : ''} ${dropTargetId === plan.id ? 'timeline-bubble-drop-target' : ''} ${plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}
+                            className={`timeline-bubble ${plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}
                           >
-                            <strong className="timeline-bubble-content">{plan.content}</strong>
-                            <span className="timeline-bubble-project-name">{plan.projectName}</span>
-                            <span className="timeline-bubble-user">{plan.displayName || plan.username}</span>
-                            {plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
-                          </motion.button>
+                            <button type="button" onClick={() => setViewingPlan(plan)} className="timeline-bubble-details" aria-label={`查看计划：${plan.content}`}>
+                              <strong className="timeline-bubble-content">{plan.content}</strong>
+                              <span className="timeline-bubble-project-name">{plan.projectName}</span>
+                              <span className="timeline-bubble-user">{plan.displayName || plan.username}</span>
+                              {plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
+                            </button>
+                            {!isSuperAdmin && selectedProjectId !== 'all' && (
+                              <div className="timeline-bubble-order-actions" aria-label="调整排序">
+                                <button type="button" onClick={() => movePlan(weekday, plan.id, -1)} disabled={orderedDayPlans(weekday).findIndex((item) => item.id === plan.id) === 0 || saveOrder.isPending} title="向上移动一格" aria-label="向上移动一格">
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button type="button" onClick={() => movePlan(weekday, plan.id, 1)} disabled={orderedDayPlans(weekday).findIndex((item) => item.id === plan.id) === orderedDayPlans(weekday).length - 1 || saveOrder.isPending} title="向下移动一格" aria-label="向下移动一格">
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </motion.article>
                         )) : <span className="timeline-empty">暂无计划</span>}
                       </div>
                       {index < timelineDays.length - 1 && (
@@ -397,18 +376,7 @@ export function BoardPage() {
                   ))}
                 </div>
               </div>
-              {dragGhost && (
-                <div
-                  className={`timeline-drag-ghost ${dragGhost.plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}
-                  style={{ left: dragGhost.x, top: dragGhost.y }}
-                  aria-hidden="true"
-                >
-                  <strong className="timeline-bubble-content">{dragGhost.plan.content}</strong>
-                  <span className="timeline-bubble-project-name">{dragGhost.plan.projectName}</span>
-                  <span className="timeline-bubble-user">{dragGhost.plan.displayName || dragGhost.plan.username}</span>
-                  {dragGhost.plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
-                </div>
-              )}
+              </div>
               {expandedDay && (
                 <div className="timeline-fullscreen-backdrop" role="dialog" aria-modal="true" aria-label={`${weekdayLabels[expandedDay]}计划总览`}>
                   <section className="timeline-fullscreen-panel">
@@ -441,9 +409,12 @@ export function BoardPage() {
       <PlanDetailModal
         plan={viewingPlan}
         onClose={() => setViewingPlan(undefined)}
-        onEdit={viewingPlan && canManageAssignedPlan(viewingPlan) ? editAssignedPlan : undefined}
-        onArchive={viewingPlan && canManageAssignedPlan(viewingPlan) ? archiveAssignedPlan : undefined}
-        onDelete={viewingPlan && canManageAssignedPlan(viewingPlan) ? deleteAssignedPlan : undefined}
+        onEdit={viewingPlan && canManagePlan(viewingPlan) ? editAssignedPlan : undefined}
+        onArchive={viewingPlan && canManagePlan(viewingPlan) ? archiveAssignedPlan : undefined}
+        onDelete={viewingPlan && canManagePlan(viewingPlan) ? deleteAssignedPlan : undefined}
+        sortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? Math.max(1, orderedDayPlans(viewingPlan.weekday).findIndex((plan) => plan.id === viewingPlan.id) + 1) : undefined}
+        maxSortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? orderedDayPlans(viewingPlan.weekday).length : undefined}
+        onSortPositionChange={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? movePlanToPosition : undefined}
       />
       <PlanModal
         isOpen={isPlanModalOpen}

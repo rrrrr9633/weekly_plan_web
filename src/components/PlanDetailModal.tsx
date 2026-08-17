@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Archive, Calendar, FileText, Pencil, Trash2, User, X } from 'lucide-react'
 import { PLAN_WEEKDAY_OPTIONS } from '@/types'
 import type { WeekPlan } from '@/types'
@@ -8,9 +9,17 @@ interface PlanDetailModalProps {
   onEdit?: (plan: WeekPlan) => void
   onArchive?: (plan: WeekPlan) => void
   onDelete?: (plan: WeekPlan) => void
+  sortPosition?: number
+  maxSortPosition?: number
+  onSortPositionChange?: (plan: WeekPlan, position: number) => void
 }
 
-export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete }: PlanDetailModalProps) {
+export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete, sortPosition, maxSortPosition, onSortPositionChange }: PlanDetailModalProps) {
+  const [draftSortPosition, setDraftSortPosition] = useState(1)
+
+  useEffect(() => {
+    setDraftSortPosition(sortPosition ?? 1)
+  }, [plan?.id, sortPosition])
   if (!plan) return null
 
   return (
@@ -57,11 +66,33 @@ export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete }: 
           </div>
         </div>
 
-        {(onEdit || onArchive || onDelete) && (
-          <footer className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] px-[var(--spacing-xl)] py-[var(--spacing-md)]">
-            {onEdit && <button type="button" onClick={() => onEdit(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--accent)] hover:text-white transition-colors"><Pencil className="w-4 h-4" />编辑</button>}
-            {onArchive && <button type="button" onClick={() => onArchive(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--status-warning)] hover:text-white transition-colors"><Archive className="w-4 h-4" />归档</button>}
-            {onDelete && <button type="button" onClick={() => onDelete(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] text-[var(--status-error)] hover:bg-[var(--status-error)] hover:text-white transition-colors"><Trash2 className="w-4 h-4" />删除</button>}
+        {(onSortPositionChange || onEdit || onArchive || onDelete) && (
+          <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-[var(--spacing-xl)] py-[var(--spacing-md)]">
+            {onSortPositionChange && maxSortPosition && (
+              <label className="flex items-center gap-2 text-sm text-secondary">
+                排序
+                <input
+                  type="number"
+                  min={1}
+                  max={maxSortPosition}
+                  value={draftSortPosition}
+                  onChange={(event) => setDraftSortPosition(event.target.valueAsNumber)}
+                  onBlur={() => {
+                    const position = Math.max(1, Math.min(Number.isFinite(draftSortPosition) ? Math.trunc(draftSortPosition) : 1, maxSortPosition))
+                    setDraftSortPosition(position)
+                    if (position !== sortPosition) onSortPositionChange(plan, position)
+                  }}
+                  aria-label="排序位次"
+                  className="w-16 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-3)] px-2 py-1 text-center text-primary focus:border-[var(--accent)] focus:outline-none"
+                />
+                <span>／{maxSortPosition}</span>
+              </label>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              {onEdit && <button type="button" onClick={() => onEdit(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--accent)] hover:text-white transition-colors"><Pencil className="w-4 h-4" />编辑</button>}
+              {onArchive && <button type="button" onClick={() => onArchive(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--status-warning)] hover:text-white transition-colors"><Archive className="w-4 h-4" />归档</button>}
+              {onDelete && <button type="button" onClick={() => onDelete(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] text-[var(--status-error)] hover:bg-[var(--status-error)] hover:text-white transition-colors"><Trash2 className="w-4 h-4" />删除</button>}
+            </div>
           </footer>
         )}
       </section>
