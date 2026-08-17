@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Archive, Calendar, FileText, Pencil, Trash2, User, X } from 'lucide-react'
+import { Archive, Calendar, FileText, Pencil, Trash2, User, UserMinus, X } from 'lucide-react'
 import { PLAN_WEEKDAY_OPTIONS } from '@/types'
 import type { WeekPlan } from '@/types'
 
@@ -9,12 +9,14 @@ interface PlanDetailModalProps {
   onEdit?: (plan: WeekPlan) => void
   onArchive?: (plan: WeekPlan) => void
   onDelete?: (plan: WeekPlan) => void
+  onClaim?: (plan: WeekPlan) => void
+  onLeave?: (plan: WeekPlan) => void
   sortPosition?: number
   maxSortPosition?: number
   onSortPositionChange?: (plan: WeekPlan, position: number) => void
 }
 
-export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete, sortPosition, maxSortPosition, onSortPositionChange }: PlanDetailModalProps) {
+export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete, onClaim, onLeave, sortPosition, maxSortPosition, onSortPositionChange }: PlanDetailModalProps) {
   const [draftSortPosition, setDraftSortPosition] = useState(1)
 
   useEffect(() => {
@@ -61,12 +63,19 @@ export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete, so
           </dl>
 
           <div>
+            <h3 className="flex items-center gap-2 text-sm font-medium mb-2"><User className="w-4 h-4 text-secondary" />参与人</h3>
+            <div className="flex flex-wrap gap-2">
+              {plan.participants.map((participant) => <span key={participant.userId} className="px-2 py-1 text-sm rounded-[var(--radius-sm)] surface-3">{participant.displayName}{participant.responsible ? '（负责人）' : ''}</span>)}
+            </div>
+          </div>
+
+          <div>
             <h3 className="flex items-center gap-2 text-sm font-medium mb-2"><FileText className="w-4 h-4 text-secondary" />计划内容</h3>
             <p className="whitespace-pre-wrap surface-3 rounded-[var(--radius-md)] p-[var(--spacing-md)] text-primary">{plan.content}</p>
           </div>
         </div>
 
-        {(onSortPositionChange || onEdit || onArchive || onDelete) && (
+        {(onSortPositionChange || onEdit || onArchive || onDelete || onClaim || onLeave) && (
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-[var(--spacing-xl)] py-[var(--spacing-md)]">
             {onSortPositionChange && maxSortPosition && (
               <label className="flex items-center gap-2 text-sm text-secondary">
@@ -89,6 +98,8 @@ export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete, so
               </label>
             )}
             <div className="flex flex-wrap justify-end gap-2">
+              {onClaim && <button type="button" onClick={() => onClaim(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] bg-[var(--accent)] text-white"><User className="w-4 h-4" />认领</button>}
+              {onLeave && <button type="button" onClick={() => onLeave(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3"><UserMinus className="w-4 h-4" />退出计划</button>}
               {onEdit && <button type="button" onClick={() => onEdit(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--accent)] hover:text-white transition-colors"><Pencil className="w-4 h-4" />编辑</button>}
               {onArchive && <button type="button" onClick={() => onArchive(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--status-warning)] hover:text-white transition-colors"><Archive className="w-4 h-4" />归档</button>}
               {onDelete && <button type="button" onClick={() => onDelete(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] text-[var(--status-error)] hover:bg-[var(--status-error)] hover:text-white transition-colors"><Trash2 className="w-4 h-4" />删除</button>}

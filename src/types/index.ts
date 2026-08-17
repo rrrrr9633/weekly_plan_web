@@ -45,6 +45,12 @@ export const PLAN_WEEKDAY_OPTIONS: ReadonlyArray<{ value: PlanWeekday; label: st
   { value: 'pending', label: '待定' },
 ]
 
+export interface PlanParticipant {
+  userId: string
+  displayName: string
+  responsible: boolean
+}
+
 export interface WeekPlan {
   id: string
   projectId: string
@@ -67,6 +73,7 @@ export interface WeekPlan {
   status: 'active' | 'archived'
   archivedAt?: string
   boardPosition?: number
+  participants: PlanParticipant[]
 }
 
 export interface WeekRange {

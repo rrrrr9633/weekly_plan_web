@@ -7,12 +7,14 @@ import { ProjectTimeline } from '@/components/ProjectTimeline'
 import { PlanModal } from '@/components/PlanModal'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
 import { useWeekStore } from '@/store/weekStore'
+import { useAuthStore } from '@/store/authStore'
 import { weekPlanApi, projectApi, ApiError } from '@/services/api'
 import type { WeekPlan } from '@/types'
 
 export function PersonalPage() {
   const queryClient = useQueryClient()
   const { currentYear, currentWeek } = useWeekStore()
+  const currentUser = useAuthStore((state) => state.user)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingPlan, setEditingPlan] = useState<WeekPlan | undefined>()
   const [viewingPlan, setViewingPlan] = useState<WeekPlan | undefined>()
@@ -71,6 +73,15 @@ export function PersonalPage() {
   const archiveMutation = useMutation({
     mutationFn: weekPlanApi.archive,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myPlans'] }),
+  })
+
+  const leaveMutation = useMutation({
+    mutationFn: weekPlanApi.leave,
+    onSuccess: () => {
+      setViewingPlan(undefined)
+      queryClient.invalidateQueries({ queryKey: ['myPlans'] })
+      queryClient.invalidateQueries({ queryKey: ['weekPlans'] })
+    },
   })
 
   const handleSubmit = (data: { projectId: string; plans: Array<{ content: string; weekday: WeekPlan['weekday'] }> }) => {
@@ -181,6 +192,7 @@ export function PersonalPage() {
         onEdit={handleEdit}
         onArchive={(plan) => handleArchive(plan.id)}
         onDelete={(plan) => handleDelete(plan.id)}
+        onLeave={viewingPlan?.participants.some((participant) => participant.userId === currentUser?.id && !participant.responsible) ? (plan) => leaveMutation.mutate(plan.id) : undefined}
       />
 
       <PlanModal

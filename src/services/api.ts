@@ -195,6 +195,10 @@ export const weekPlanApi = {
 
   archive: (id: string) => api.put<WeekPlan>(`/plans/${id}/archive`),
 
+  claim: (id: string) => api.post<WeekPlan>(`/plans/${id}/claim`),
+
+  leave: (id: string) => api.delete<void>(`/plans/${id}/claim`),
+
   restore: (id: string) => api.put<WeekPlan>(`/plans/${id}/restore`),
 
   saveBoardOrder: (data: { projectId: string; year: number; weekNumber: number; weekday: WeekPlan['weekday']; planIds: string[] }) =>

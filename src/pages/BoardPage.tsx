@@ -100,6 +100,25 @@ export function BoardPage() {
     },
   })
 
+  const claimPlan = useMutation({
+    mutationFn: weekPlanApi.claim,
+    onSuccess: (updatedPlan) => {
+      queryClient.setQueryData<WeekPlan[]>(['weekPlans', currentYear, currentWeek, companyId], (cached = []) =>
+        cached.map((plan) => plan.id === updatedPlan.id ? updatedPlan : plan)
+      )
+      setViewingPlan((plan) => plan?.id === updatedPlan.id ? updatedPlan : plan)
+      queryClient.invalidateQueries({ queryKey: ['myPlans'] })
+    },
+  })
+  const leavePlan = useMutation({
+    mutationFn: weekPlanApi.leave,
+    onSuccess: () => {
+      setViewingPlan(undefined)
+      queryClient.invalidateQueries({ queryKey: ['weekPlans'] })
+      queryClient.invalidateQueries({ queryKey: ['myPlans'] })
+    },
+  })
+
   const searchMatchedPlans = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     if (!query) return plans
@@ -197,7 +216,7 @@ export function BoardPage() {
   }
 
   const canManagePlan = (plan: WeekPlan) =>
-    !isSuperAdmin && (plan.userId === currentUser?.id || (plan.isAssigned && plan.assignedByUserId === currentUser?.id))
+    !isSuperAdmin && plan.participants.some((participant) => participant.userId === currentUser?.id)
 
   const editAssignedPlan = (plan: WeekPlan) => {
     setViewingPlan(undefined)
@@ -412,6 +431,8 @@ export function BoardPage() {
         onEdit={viewingPlan && canManagePlan(viewingPlan) ? editAssignedPlan : undefined}
         onArchive={viewingPlan && canManagePlan(viewingPlan) ? archiveAssignedPlan : undefined}
         onDelete={viewingPlan && canManagePlan(viewingPlan) ? deleteAssignedPlan : undefined}
+        onClaim={viewingPlan && !isSuperAdmin && !viewingPlan.participants.some((participant) => participant.userId === currentUser?.id) ? (plan) => claimPlan.mutate(plan.id) : undefined}
+        onLeave={viewingPlan && !isSuperAdmin && viewingPlan.participants.some((participant) => participant.userId === currentUser?.id && !participant.responsible) ? (plan) => leavePlan.mutate(plan.id) : undefined}
         sortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? Math.max(1, orderedDayPlans(viewingPlan.weekday).findIndex((plan) => plan.id === viewingPlan.id) + 1) : undefined}
         maxSortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? orderedDayPlans(viewingPlan.weekday).length : undefined}
         onSortPositionChange={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? movePlanToPosition : undefined}
