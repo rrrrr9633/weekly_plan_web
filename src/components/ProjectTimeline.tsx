@@ -22,8 +22,9 @@ export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimel
 
   return (
     <section className="timeline-shell" aria-label="项目计划时间流">
-      <div className="timeline-viewport">
-        <div className="timeline-canvas" style={{ '--timeline-scale': 1 } as CSSProperties}>
+      <div className="timeline-scroll-shell">
+        <div className="timeline-viewport">
+          <div className="timeline-canvas" style={{ '--timeline-scale': 1 } as CSSProperties}>
           {timelineDays.map((weekday, index) => (
             <div className="timeline-day" key={weekday}>
               <div className="timeline-day-header">
@@ -59,6 +60,7 @@ export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimel
               )}
             </div>
           ))}
+          </div>
         </div>
       </div>
       {expandedDay && (
