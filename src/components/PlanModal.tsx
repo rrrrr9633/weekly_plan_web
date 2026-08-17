@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { X, Plus, Minus } from 'lucide-react'
-import type { PlanWeekday, Project, WeekPlan } from '@/types'
+import type { PlanWeekday, Project, User, WeekPlan } from '@/types'
 import { PLAN_WEEKDAY_OPTIONS } from '@/types'
 import { useWeekStore } from '@/store/weekStore'
 
@@ -13,11 +13,12 @@ interface PlanModalProps {
   onSubmit: (data: { projectId: string; plans: PlanDraft[] }) => void
   projects: Project[]
   editingPlan?: WeekPlan
+  assignee?: User
 }
 
 const emptyPlan = (): PlanDraft => ({ content: '', weekday: 'pending' })
 
-export function PlanModal({ isOpen, onClose, onSubmit, projects, editingPlan }: PlanModalProps) {
+export function PlanModal({ isOpen, onClose, onSubmit, projects, editingPlan, assignee }: PlanModalProps) {
   const { currentYear, currentWeek, getWeekRange } = useWeekStore()
   const [selectedProject, setSelectedProject] = useState('')
   const [plans, setPlans] = useState<PlanDraft[]>([emptyPlan()])
@@ -63,8 +64,8 @@ export function PlanModal({ isOpen, onClose, onSubmit, projects, editingPlan }: 
       >
         <div className="flex items-center justify-between p-[var(--spacing-xl)] border-b border-[var(--border)]">
           <div>
-            <h2 className="text-xl font-bold">{editingPlan ? '编辑计划' : '批量添加计划'}</h2>
-            {!editingPlan && <p className="text-sm text-secondary mt-1">同一项目的每条计划会分别保存并独立展示</p>}
+            <h2 className="text-xl font-bold">{editingPlan ? '编辑计划' : assignee ? `为 ${assignee.displayName || assignee.username} 分配计划` : '批量添加计划'}</h2>
+            {!editingPlan && <p className="text-sm text-secondary mt-1">{assignee ? '计划将以管理员分配形式保存，分配者与被分配成员均可管理该计划。' : '同一项目的每条计划会分别保存并独立展示'}</p>}
           </div>
           <button onClick={onClose} aria-label="关闭" className="p-1 rounded-[var(--radius-md)] hover:bg-[var(--surface-3)] transition-all">
             <X className="w-5 h-5" />

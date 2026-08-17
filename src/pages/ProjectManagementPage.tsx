@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Loader2, Edit2, Trash2 } from 'lucide-react'
+import { useAuthStore } from '@/store/authStore'
+import { useTenantContextStore } from '@/store/tenantContextStore'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { projectApi } from '@/services/api'
 import type { Project } from '@/types'
@@ -10,10 +12,14 @@ export function ProjectManagementPage() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | undefined>()
+  const isSuperAdmin = useAuthStore((state) => state.user?.role === 'super_admin')
+  const companyId = useTenantContextStore((state) => state.companyId)
+  const hasCompanyContext = !isSuperAdmin || Boolean(companyId)
 
   const { data: projects = [], isLoading } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', companyId],
     queryFn: projectApi.getAll,
+    enabled: hasCompanyContext,
   })
 
   const deleteMutation = useMutation({
@@ -38,13 +44,15 @@ export function ProjectManagementPage() {
               <h1 className="mb-2">项目管理</h1>
               <p className="text-secondary">管理系统项目和状态</p>
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2">
+            {!isSuperAdmin && <button onClick={() => setIsModalOpen(true)} className="btn-primary flex items-center gap-2">
               <Plus className="w-5 h-5" />
               添加项目
-            </button>
+            </button>}
           </div>
 
-          {isLoading ? (
+          {!hasCompanyContext ? (
+            <div className="card text-secondary">请先在侧边栏选择要查看的公司。</div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-[var(--spacing-2xl)]">
               <Loader2 className="w-8 h-8 animate-spin text-accent" />
             </div>
@@ -83,7 +91,7 @@ export function ProjectManagementPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2 pt-[var(--spacing-md)] border-t border-[var(--border)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!isSuperAdmin && <div className="flex gap-2 pt-[var(--spacing-md)] border-t border-[var(--border)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => {
                         setEditingProject(project)
@@ -101,7 +109,7 @@ export function ProjectManagementPage() {
                       <Trash2 className="w-3 h-3" />
                       删除
                     </button>
-                  </div>
+                  </div>}
                 </motion.div>
               ))}
             </div>
@@ -109,14 +117,14 @@ export function ProjectManagementPage() {
         </div>
       </div>
 
-      <ProjectModal
+      {!isSuperAdmin && <ProjectModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
           setEditingProject(undefined)
         }}
         editingProject={editingProject}
-      />
+      />}
     </PageTransition>
   )
 }

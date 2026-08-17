@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, RotateCcw } from 'lucide-react'
+import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, RotateCcw, Maximize2, X } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
 import { ProjectTimeline } from '@/components/ProjectTimeline'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
+import { PlanModal } from '@/components/PlanModal'
 import { useWeekStore } from '@/store/weekStore'
+import { useAuthStore } from '@/store/authStore'
+import { useTenantContextStore } from '@/store/tenantContextStore'
 import { projectApi, weekPlanApi } from '@/services/api'
 import { sortPlansByWeekday } from '@/lib/planSort'
 import { PLAN_WEEKDAY_OPTIONS, type PlanWeekday, type WeekPlan } from '@/types'
@@ -18,6 +21,10 @@ const weekdayLabels = Object.fromEntries(PLAN_WEEKDAY_OPTIONS.map(({ value, labe
 
 export function BoardPage() {
   const { currentYear, currentWeek } = useWeekStore()
+  const currentUser = useAuthStore((state) => state.user)
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+  const companyId = useTenantContextStore((state) => state.companyId)
+  const hasCompanyContext = !isSuperAdmin || Boolean(companyId)
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<BoardViewMode>('user')
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({})
@@ -37,14 +44,19 @@ export function BoardPage() {
   const pinchBaseScale = useRef(1)
   const queryClient = useQueryClient()
   const [viewingPlan, setViewingPlan] = useState<WeekPlan | undefined>()
+  const [editingPlan, setEditingPlan] = useState<WeekPlan | undefined>()
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false)
+  const [expandedDay, setExpandedDay] = useState<PlanWeekday | null>(null)
 
   const { data: plans = [], isLoading } = useQuery({
-    queryKey: ['weekPlans', currentYear, currentWeek],
+    queryKey: ['weekPlans', currentYear, currentWeek, companyId],
     queryFn: () => weekPlanApi.getByWeek(currentYear, currentWeek),
+    enabled: hasCompanyContext,
   })
   const { data: projects = [] } = useQuery({
-    queryKey: ['projects'],
+    queryKey: ['projects', companyId],
     queryFn: projectApi.getAll,
+    enabled: hasCompanyContext,
   })
 
   useEffect(() => {
@@ -69,6 +81,30 @@ export function BoardPage() {
     onSuccess: () => {
       setManualOrders({})
       queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek] })
+    },
+  })
+  const updatePlan = useMutation({
+    mutationFn: ({ id, content, weekday }: { id: string; content: string; weekday: PlanWeekday }) =>
+      weekPlanApi.update(id, { content, weekday }),
+    onSuccess: () => {
+      setViewingPlan(undefined)
+      setEditingPlan(undefined)
+      setIsPlanModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['weekPlans'] })
+    },
+  })
+  const archivePlan = useMutation({
+    mutationFn: weekPlanApi.archive,
+    onSuccess: () => {
+      setViewingPlan(undefined)
+      queryClient.invalidateQueries({ queryKey: ['weekPlans'] })
+    },
+  })
+  const deletePlan = useMutation({
+    mutationFn: weekPlanApi.delete,
+    onSuccess: () => {
+      setViewingPlan(undefined)
+      queryClient.invalidateQueries({ queryKey: ['weekPlans'] })
     },
   })
 
@@ -177,6 +213,23 @@ export function BoardPage() {
     queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek] })
   }
 
+  const canManageAssignedPlan = (plan: WeekPlan) =>
+    !isSuperAdmin && plan.isAssigned && plan.assignedByUserId === currentUser?.id
+
+  const editAssignedPlan = (plan: WeekPlan) => {
+    setViewingPlan(undefined)
+    setEditingPlan(plan)
+    setIsPlanModalOpen(true)
+  }
+
+  const archiveAssignedPlan = (plan: WeekPlan) => {
+    if (confirm('归档后计划将移入“已归档计划”，确定继续吗？')) archivePlan.mutate(plan.id)
+  }
+
+  const deleteAssignedPlan = (plan: WeekPlan) => {
+    if (confirm('确定要删除这条计划吗？')) deletePlan.mutate(plan.id)
+  }
+
   const displayedPlans = viewMode === 'user' ? searchMatchedPlans : projectPlans
   const emptyMessage = searchQuery ? '未找到匹配的计划' : '本周暂无团队计划'
 
@@ -213,7 +266,9 @@ export function BoardPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {!hasCompanyContext ? (
+            <div className="card text-secondary">请先在侧边栏选择要查看的公司。</div>
+          ) : isLoading ? (
             <div className="flex items-center justify-center py-[var(--spacing-2xl)]"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
           ) : displayedPlans.length === 0 ? (
             <div className="text-center py-[var(--spacing-2xl)]"><p className="text-secondary">{emptyMessage}</p></div>
@@ -246,7 +301,7 @@ export function BoardPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="timeline-shell"
+              className="timeline-shell project-timeline-shell"
               aria-label="项目计划时间流"
             >
               <div className="timeline-toolbar">
@@ -263,7 +318,7 @@ export function BoardPage() {
                     <ZoomIn className="w-4 h-4" />
                   </button>
                   <button type="button" onClick={() => setTimelineScale(1)} className="timeline-reset-button" title="重置缩放">100%</button>
-                  {selectedProjectId !== 'all' && (
+                  {!isSuperAdmin && selectedProjectId !== 'all' && (
                     <button type="button" onClick={restoreAllDays} className="timeline-reset-button" title="恢复当前项目的默认排序">
                       <RotateCcw className="w-3.5 h-3.5" />恢复排序
                     </button>
@@ -278,7 +333,10 @@ export function BoardPage() {
                         <span className="timeline-day-index">{index === 0 ? '0' : String(index)}</span>
                         <span>{weekdayLabels[weekday]}</span>
                         <span className="timeline-day-count">{plansByWeekday[weekday].length}</span>
-                        {selectedProjectId !== 'all' && plansByWeekday[weekday].length > 0 && (
+                        <button type="button" className="timeline-day-fullscreen" onClick={() => setExpandedDay(weekday)} aria-label={`全屏查看${weekdayLabels[weekday]}计划`} title="全屏总览">
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </button>
+                        {!isSuperAdmin && selectedProjectId !== 'all' && plansByWeekday[weekday].length > 0 && (
                           <button type="button" className="timeline-day-reset" onClick={() => restoreOrder.mutate({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday })} title={`恢复${weekdayLabels[weekday]}默认排列`}>
                             <RotateCcw className="w-3 h-3" />
                           </button>
@@ -294,7 +352,7 @@ export function BoardPage() {
                             data-plan-id={plan.id}
                             onClick={() => { if (Date.now() >= suppressDetailUntil.current) setViewingPlan(plan) }}
                             onPointerDown={(event) => {
-                              if (selectedProjectId === 'all' || (event.pointerType === 'touch' && pinchPointers.current.size > 1)) return
+                              if (isSuperAdmin || selectedProjectId === 'all' || (event.pointerType === 'touch' && pinchPointers.current.size > 1)) return
                               dragPlanId.current = plan.id
                               dragWeekday.current = weekday
                               dragInitialOrder.current = orderedDayPlans(weekday).map((item) => item.id)
@@ -320,9 +378,8 @@ export function BoardPage() {
                               setDragGhost(undefined)
                               setDropTargetId(undefined)
                             }}
-                            className={`timeline-bubble ${selectedProjectId !== 'all' ? 'timeline-bubble-draggable' : ''} ${dragGhost?.plan.id === plan.id ? 'timeline-bubble-drag-source' : ''} ${dropTargetId === plan.id ? 'timeline-bubble-drop-target' : ''} ${plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}
+                            className={`timeline-bubble ${!isSuperAdmin && selectedProjectId !== 'all' ? 'timeline-bubble-draggable' : ''} ${dragGhost?.plan.id === plan.id ? 'timeline-bubble-drag-source' : ''} ${dropTargetId === plan.id ? 'timeline-bubble-drop-target' : ''} ${plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}
                           >
-                            <span className="timeline-bubble-project">{plan.projectCode}</span>
                             <strong className="timeline-bubble-content">{plan.content}</strong>
                             <span className="timeline-bubble-project-name">{plan.projectName}</span>
                             <span className="timeline-bubble-user">{plan.displayName || plan.username}</span>
@@ -346,18 +403,61 @@ export function BoardPage() {
                   style={{ left: dragGhost.x, top: dragGhost.y }}
                   aria-hidden="true"
                 >
-                  <span className="timeline-bubble-project">{dragGhost.plan.projectCode}</span>
                   <strong className="timeline-bubble-content">{dragGhost.plan.content}</strong>
                   <span className="timeline-bubble-project-name">{dragGhost.plan.projectName}</span>
                   <span className="timeline-bubble-user">{dragGhost.plan.displayName || dragGhost.plan.username}</span>
                   {dragGhost.plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
                 </div>
               )}
+              {expandedDay && (
+                <div className="timeline-fullscreen-backdrop" role="dialog" aria-modal="true" aria-label={`${weekdayLabels[expandedDay]}计划总览`}>
+                  <section className="timeline-fullscreen-panel">
+                    <header className="timeline-fullscreen-header">
+                      <div>
+                        <p className="timeline-kicker">全屏总览</p>
+                        <h2>{weekdayLabels[expandedDay]} · {plansByWeekday[expandedDay].length} 个计划</h2>
+                        <p className="text-secondary">点击气泡查看完整计划内容</p>
+                      </div>
+                      <button type="button" className="timeline-fullscreen-close" onClick={() => setExpandedDay(null)} aria-label="关闭全屏总览">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </header>
+                    <div className="timeline-fullscreen-bubbles">
+                      {orderedDayPlans(expandedDay).map((plan) => (
+                        <button type="button" key={plan.id} onClick={() => { setExpandedDay(null); setViewingPlan(plan) }} className={`timeline-fullscreen-bubble ${plan.status === 'archived' ? 'timeline-bubble-archived' : ''}`}>
+                          <strong>{plan.content}</strong>
+                          <span>{plan.projectName}</span>
+                          <em>{plan.displayName || plan.username}</em>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              )}
             </motion.section>
           )}
         </div>
       </div>
-      <PlanDetailModal plan={viewingPlan} onClose={() => setViewingPlan(undefined)} />
+      <PlanDetailModal
+        plan={viewingPlan}
+        onClose={() => setViewingPlan(undefined)}
+        onEdit={viewingPlan && canManageAssignedPlan(viewingPlan) ? editAssignedPlan : undefined}
+        onArchive={viewingPlan && canManageAssignedPlan(viewingPlan) ? archiveAssignedPlan : undefined}
+        onDelete={viewingPlan && canManageAssignedPlan(viewingPlan) ? deleteAssignedPlan : undefined}
+      />
+      <PlanModal
+        isOpen={isPlanModalOpen}
+        onClose={() => {
+          setIsPlanModalOpen(false)
+          setEditingPlan(undefined)
+        }}
+        onSubmit={({ plans }) => {
+          const [plan] = plans
+          if (editingPlan && plan) updatePlan.mutate({ id: editingPlan.id, ...plan })
+        }}
+        projects={projects}
+        editingPlan={editingPlan}
+      />
     </PageTransition>
   )
 }

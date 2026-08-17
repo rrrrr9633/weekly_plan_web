@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LogIn, UserPlus } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { authApi, ApiError } from '@/services/api'
+import { authApi, ApiError, companyApi } from '@/services/api'
+import type { Company } from '@/types'
 import { getRoleHomePath } from '@/lib/auth'
 
 export function LoginPage() {
@@ -13,11 +14,26 @@ export function LoginPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [companyId, setCompanyId] = useState('')
+  const [loadingCompanies, setLoadingCompanies] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const sessionError = searchParams.get('reason') === 'session-invalid'
     ? '登录后会话校验失败，请确认线上后端和前端使用的是同一版本。'
     : ''
+
+  useEffect(() => {
+    if (isLogin || companies.length > 0) return
+    setLoadingCompanies(true)
+    companyApi.getRegistrationCompanies()
+      .then((items) => {
+        setCompanies(items)
+        setCompanyId(items[0]?.id ?? '')
+      })
+      .catch(() => setError('无法获取可注册公司，请稍后重试'))
+      .finally(() => setLoadingCompanies(false))
+  }, [isLogin, companies.length])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,13 +43,17 @@ export function LoginPage() {
       setError('注册密码至少需要 8 位')
       return
     }
+    if (!isLogin && !companyId) {
+      setError('请选择所属公司')
+      return
+    }
 
     setLoading(true)
 
     try {
       const response = isLogin
         ? await authApi.login(username, password)
-        : await authApi.register(username, password)
+        : await authApi.register(username, password, companyId)
 
       setAuth(response.user, response.token)
       navigate(getRoleHomePath(response.user), { replace: true })
@@ -93,6 +113,23 @@ export function LoginPage() {
                 required
               />
             </div>
+
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium mb-2">所属公司</label>
+                <select
+                  value={companyId}
+                  onChange={(event) => setCompanyId(event.target.value)}
+                  disabled={loadingCompanies || companies.length === 0}
+                  className="w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors disabled:opacity-50"
+                  required
+                >
+                  {loadingCompanies && <option value="">正在加载公司...</option>}
+                  {!loadingCompanies && companies.length === 0 && <option value="">暂无可注册公司</option>}
+                  {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium mb-2">密码</label>

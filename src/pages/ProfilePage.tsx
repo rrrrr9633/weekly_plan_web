@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { KeyRound, UserRound } from 'lucide-react'
 import { ApiError, userApi } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
@@ -12,6 +12,11 @@ export function ProfilePage() {
   const [message, setMessage] = useState('')
   const [savingName, setSavingName] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+
+  useEffect(() => {
+    if (!token) return
+    userApi.getMe().then((nextUser) => setAuth(nextUser, token)).catch(() => undefined)
+  }, [token, setAuth])
 
   if (!user || !token) return null
   const sessionToken = token
@@ -56,6 +61,7 @@ export function ProfilePage() {
       </header>
       <section className="card space-y-[var(--spacing-lg)]">
         <div><label className="block text-sm font-medium mb-2">用户名</label><div className="surface-3 rounded-[var(--radius-md)] px-[var(--spacing-md)] py-[var(--spacing-sm)] text-secondary">{user.username}</div></div>
+        <div><label className="block text-sm font-medium mb-2">所属公司</label><div className="surface-3 rounded-[var(--radius-md)] px-[var(--spacing-md)] py-[var(--spacing-sm)] text-secondary">{user.companyName || (user.role === 'super_admin' ? '超级管理员（未绑定公司）' : '未绑定公司')}</div></div>
         <div><label className="block text-sm font-medium mb-2">姓名</label><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={30} className="w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none" /><button onClick={saveName} disabled={savingName} className="btn-primary mt-3 disabled:opacity-50"><UserRound className="w-4 h-4" />{savingName ? '保存中…' : '保存姓名'}</button></div>
       </section>
       <section className="card mt-[var(--spacing-xl)] space-y-[var(--spacing-md)]">

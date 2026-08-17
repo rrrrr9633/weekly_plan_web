@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Loader2 } from 'lucide-react'
+import { Plus, Loader2, Download } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
 import { ProjectTimeline } from '@/components/ProjectTimeline'
@@ -17,6 +17,7 @@ export function PersonalPage() {
   const [editingPlan, setEditingPlan] = useState<WeekPlan | undefined>()
   const [viewingPlan, setViewingPlan] = useState<WeekPlan | undefined>()
   const [operationError, setOperationError] = useState<string | undefined>()
+  const [isExporting, setIsExporting] = useState(false)
 
   // 获取项目列表
   const { data: projects = [] } = useQuery({
@@ -82,25 +83,41 @@ export function PersonalPage() {
   }
 
   const handleEdit = (plan: WeekPlan) => {
-    if (plan.isAssigned) return // 分配的计划不能编辑
+    setViewingPlan(undefined)
     setEditingPlan(plan)
     setIsModalOpen(true)
   }
 
   const handleDelete = (id: string) => {
     if (confirm('确定要删除这条计划吗？')) {
+      setViewingPlan(undefined)
       deleteMutation.mutate(id)
     }
   }
 
   const handleArchive = (id: string) => {
-    if (confirm('归档后计划将移入“已归档计划”，确定继续吗？')) archiveMutation.mutate(id)
+    if (confirm('归档后计划将移入“已归档计划”，确定继续吗？')) {
+      setViewingPlan(undefined)
+      archiveMutation.mutate(id)
+    }
   }
 
   const openNewPlanModal = () => {
     setOperationError(undefined)
     setEditingPlan(undefined)
     setIsModalOpen(true)
+  }
+
+  const exportWeekReport = async () => {
+    setOperationError(undefined)
+    setIsExporting(true)
+    try {
+      await weekPlanApi.exportMyWeekReport(currentYear, currentWeek)
+    } catch (error) {
+      setOperationError(error instanceof ApiError ? error.message : '导出周报失败，请稍后重试')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   return (
@@ -112,10 +129,20 @@ export function PersonalPage() {
               <h1 className="mb-2">我的周计划</h1>
               <p className="text-secondary">管理你的个人周计划和被分配的任务</p>
             </div>
-            <button onClick={openNewPlanModal} className="btn-primary flex items-center gap-2">
-              <Plus className="w-5 h-5" />
-              添加计划
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={exportWeekReport}
+                disabled={isExporting}
+                className="btn-secondary flex items-center gap-2"
+              >
+                {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                导出周报
+              </button>
+              <button onClick={openNewPlanModal} className="btn-primary flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                添加计划
+              </button>
+            </div>
           </div>
 
           {operationError && (
@@ -143,15 +170,18 @@ export function PersonalPage() {
               plans={plans}
               showUser={false}
               onView={setViewingPlan}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onArchive={handleArchive}
             />
           )}
         </div>
       </div>
 
-      <PlanDetailModal plan={viewingPlan} onClose={() => setViewingPlan(undefined)} />
+      <PlanDetailModal
+        plan={viewingPlan}
+        onClose={() => setViewingPlan(undefined)}
+        onEdit={handleEdit}
+        onArchive={(plan) => handleArchive(plan.id)}
+        onDelete={(plan) => handleDelete(plan.id)}
+      />
 
       <PlanModal
         isOpen={isModalOpen}

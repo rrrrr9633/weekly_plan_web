@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Archive, Loader2 } from 'lucide-react'
+import { Archive, Loader2, RotateCcw } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
-import { PlanCard } from '@/components/PlanCard'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
 import { weekPlanApi } from '@/services/api'
 import type { WeekPlan } from '@/types'
@@ -86,8 +85,33 @@ export function ArchivedPlansPage() {
                       <p className="text-sm text-secondary mt-1">{group.plans.length} 条已归档计划</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-lg)]">
-                    {group.plans.map((plan) => <PlanCard key={plan.id} plan={plan} showUser={false} onView={setViewingPlan} onRestore={handleRestore} />)}
+                  <div className="space-y-2">
+                    {group.plans.map((plan) => (
+                      <article
+                        key={plan.id}
+                        onClick={() => setViewingPlan(plan)}
+                        className="group flex cursor-pointer items-center gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 transition-colors hover:border-[var(--accent)] hover:bg-white"
+                      >
+                        <span className="shrink-0 rounded-[var(--radius-sm)] bg-[var(--status-warning)]/15 px-2 py-1 text-xs font-medium text-[var(--status-warning)]">
+                          {plan.projectCode}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium">{plan.projectName}</span>
+                            <span className="text-secondary">· {plan.weekday === 'pending' ? '待定' : `周${['一', '二', '三', '四', '五', '六', '日'][['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].indexOf(plan.weekday)]}`}</span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm text-secondary">{plan.content}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => { event.stopPropagation(); handleRestore(plan.id) }}
+                          disabled={restoreMutation.isPending}
+                          className="flex shrink-0 items-center gap-1 rounded-[var(--radius-full)] px-3 py-1.5 text-xs text-accent transition-colors hover:bg-[var(--accent)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />移出归档
+                        </button>
+                      </article>
+                    ))}
                   </div>
                 </section>
               ))}

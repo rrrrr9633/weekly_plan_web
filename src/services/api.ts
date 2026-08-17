@@ -1,5 +1,6 @@
 import { useAuthStore } from '@/store/authStore'
-import type { Project, User, WeekPlan } from '@/types'
+import { useTenantContextStore } from '@/store/tenantContextStore'
+import type { Company, Project, User, WeekPlan } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tianxiadiyi.xyz/api'
 const TIMEOUT_MS = 10000
@@ -35,6 +36,11 @@ async function request<T>(
   options: { body?: unknown; params?: Query } = {}
 ): Promise<T> {
   const token = useAuthStore.getState().token
+  const user = useAuthStore.getState().user
+  const companyId = useTenantContextStore.getState().companyId
+  const companyContext: Record<string, string> = user?.role === 'super_admin' && companyId
+    ? { 'X-Company-Id': companyId }
+    : {}
 
   const response = await fetch(buildUrl(path, options.params), {
     method,
@@ -42,6 +48,7 @@ async function request<T>(
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...companyContext,
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   })
@@ -59,6 +66,32 @@ async function request<T>(
   }
 
   return payload as T
+}
+
+async function download(path: string, filename: string): Promise<void> {
+  const token = useAuthStore.getState().token
+  const user = useAuthStore.getState().user
+  const companyId = useTenantContextStore.getState().companyId
+  const response = await fetch(buildUrl(path), {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(user?.role === 'super_admin' && companyId ? { 'X-Company-Id': companyId } : {}),
+    },
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+  }
+
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
 }
 
 export const api = {
@@ -79,10 +112,17 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { username, password }),
 
-  register: (username: string, password: string) =>
-    api.post<AuthResponse>('/auth/register', { username, password }),
+  register: (username: string, password: string, companyId: string) =>
+    api.post<AuthResponse>('/auth/register', { username, password, companyId }),
 
   logout: () => api.post<void>('/auth/logout'),
+}
+
+export const companyApi = {
+  getRegistrationCompanies: () => api.get<Company[]>('/companies/public'),
+  getAll: () => api.get<Company[]>('/companies'),
+  create: (data: { code: string; name: string }) => api.post<Company>('/companies', data),
+  delete: (id: string) => api.delete<void>(`/companies/${id}`),
 }
 
 // User API
@@ -98,6 +138,8 @@ export const userApi = {
   update: (id: string, data: Partial<{ username: string; role: User['role'] }>) =>
     api.put<User>(`/users/${id}`, data),
   delete: (id: string) => api.delete<void>(`/users/${id}`),
+  moveToCompany: (id: string, companyId: string) =>
+    api.put<User>(`/users/${id}/company`, { companyId }),
 }
 
 // Project API
@@ -122,6 +164,9 @@ export const weekPlanApi = {
   // 获取当前用户指定周的计划（个人视图用）
   getMyPlans: (year: number, week: number) =>
     api.get<WeekPlan[]>(`/plans/my/${year}/${week}`),
+
+  exportMyWeekReport: (year: number, week: number) =>
+    download(`/plans/my/${year}/${week}/report`, `${year}年第${week}周个人周报.xlsx`),
 
   create: (data: {
     projectId: string

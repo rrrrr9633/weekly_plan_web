@@ -153,11 +153,29 @@
   }
 
   .timeline-viewport {
-    overflow-x: auto;
+    overflow-x: scroll;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    scrollbar-color: #4f9f98 #d7e8e6;
     touch-action: pan-x pan-y;
     padding: var(--spacing-xl);
     background-image: linear-gradient(rgb(15 118 110 / 0.06) 1px, transparent 1px), linear-gradient(90deg, rgb(15 118 110 / 0.06) 1px, transparent 1px);
     background-size: 28px 28px;
+  }
+
+  .timeline-viewport::-webkit-scrollbar { height: 0.8rem; }
+  .timeline-viewport::-webkit-scrollbar-track { background: #d7e8e6; }
+  .timeline-viewport::-webkit-scrollbar-thumb { border: 3px solid #d7e8e6; border-radius: 999px; background: #4f9f98; }
+  .timeline-viewport::-webkit-scrollbar-thumb:hover { background: var(--accent-muted); }
+
+  .project-timeline-shell {
+    --timeline-visible-height: clamp(28rem, calc(100vh - 18rem), 40rem);
+    --timeline-bubble-viewport-height: calc(var(--timeline-visible-height) - 2.25rem);
+  }
+
+  .project-timeline-shell .timeline-viewport {
+    height: var(--timeline-visible-height);
+    overflow-y: hidden;
   }
 
   .timeline-canvas {
@@ -172,9 +190,9 @@
 
   .timeline-day {
     position: relative;
-    width: 10.5rem;
-    min-height: 16rem;
-    flex: 0 0 10.5rem;
+    width: 14rem;
+    min-height: 22rem;
+    flex: 0 0 14rem;
   }
 
   .timeline-day-header {
@@ -206,16 +224,26 @@
 
   .timeline-bubbles {
     display: flex;
-    min-height: 11rem;
+    /* 画布缩放时仅延长日期栏内部可滚动空间，外层大框高度保持不变。 */
+    height: calc(var(--timeline-bubble-viewport-height, 40rem) / var(--timeline-scale));
+    min-height: calc(var(--timeline-bubble-viewport-height, 40rem) / var(--timeline-scale));
     flex-direction: column;
-    gap: 0.5rem;
-    padding-right: 1rem;
+    gap: 0.75rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.6rem;
+    scrollbar-width: thin;
+    scrollbar-color: #9fc8c2 transparent;
   }
+
+  .timeline-bubbles::-webkit-scrollbar { width: 0.35rem; }
+  .timeline-bubbles::-webkit-scrollbar-thumb { border-radius: 999px; background: #9fc8c2; }
 
   .timeline-bubble {
     position: relative;
     display: flex;
-    min-height: 5rem;
+    min-height: 9.75rem;
+    flex: 0 0 9.75rem;
     flex-direction: column;
     align-items: flex-start;
     overflow: hidden;
@@ -224,7 +252,7 @@
     background: linear-gradient(145deg, #ffffff, #e8f5f3);
     box-shadow: 0 6px 14px rgb(15 118 110 / 0.12);
     color: var(--text-primary);
-    padding: 0.7rem 0.75rem;
+    padding: 0.75rem 0.85rem;
     text-align: left;
     transition: transform 160ms ease, box-shadow 160ms ease;
   }
@@ -312,11 +340,11 @@
     margin-top: 0.24rem;
     overflow: hidden;
     color: var(--text-primary);
-    font-size: 0.86rem;
+    font-size: 1rem;
     font-weight: 700;
-    line-height: 1.32;
+    line-height: 1.45;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 4;
   }
 
   .timeline-bubble-user {
@@ -469,25 +497,129 @@
     cursor: pointer;
   }
 
-  .timeline-bubble-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.6rem;
+  .timeline-day-fullscreen {
+    display: grid;
+    width: 1.55rem;
+    height: 1.55rem;
+    margin-left: auto;
+    place-items: center;
+    border: 1px solid #bfd2d1;
+    border-radius: var(--radius-sm);
+    background: rgb(255 255 255 / 0.76);
+    color: var(--accent-muted);
+    transition: background 150ms ease, color 150ms ease, transform 150ms ease;
   }
 
-  .timeline-bubble-actions button {
-    border-radius: 999px;
-    background: rgb(15 118 110 / 0.1);
-    padding: 0.2rem 0.5rem;
-    color: var(--accent);
-    font-size: 0.7rem;
-  }
-
-  .timeline-bubble-actions button:hover {
+  .timeline-day-fullscreen:hover {
     background: var(--accent);
     color: white;
+    transform: scale(1.06);
   }
+
+  .timeline-fullscreen-backdrop {
+    position: fixed;
+    z-index: 70;
+    inset: 0;
+    display: grid;
+    place-items: stretch;
+    background: rgb(15 23 42 / 0.76);
+    backdrop-filter: blur(8px);
+  }
+
+  .timeline-fullscreen-panel {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    background: linear-gradient(145deg, #f8fbfd, #e8f3f2);
+  }
+
+  .timeline-fullscreen-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid #c7ddda;
+    background: rgb(255 255 255 / 0.78);
+  }
+
+  .timeline-fullscreen-header h2 {
+    margin-top: 0.15rem;
+    font-size: 1.35rem;
+  }
+
+  .timeline-fullscreen-close {
+    display: grid;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--radius-full);
+    background: var(--surface-3);
+    color: var(--text-secondary);
+  }
+
+  .timeline-fullscreen-close:hover { background: var(--accent); color: white; }
+
+  .timeline-fullscreen-bubbles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    align-content: start;
+    gap: 0.5rem;
+    overflow: auto;
+    padding: 1.5rem 2rem 2rem;
+  }
+
+  .timeline-fullscreen-bubble {
+    display: flex;
+    min-width: 0;
+    min-height: 3.85rem;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow: hidden;
+    border: 1px solid #b9d7d3;
+    border-radius: 0.75rem;
+    background: rgb(255 255 255 / 0.85);
+    box-shadow: 0 2px 8px rgb(15 118 110 / 0.08);
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  }
+
+  .timeline-fullscreen-bubble:hover {
+    z-index: 1;
+    background: #fff;
+    box-shadow: 0 10px 22px rgb(15 118 110 / 0.18);
+    transform: translateY(-2px);
+  }
+
+  .timeline-fullscreen-bubble strong {
+    display: -webkit-box;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    line-height: 1.3;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .timeline-fullscreen-bubble > span:not(.timeline-bubble-project), .timeline-fullscreen-bubble em {
+    max-width: 100%;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: 0.62rem;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    .timeline-fullscreen-header, .timeline-fullscreen-bubbles { padding: 1rem; }
+    .timeline-fullscreen-bubbles { grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); }
+  }
+
 
   .page-transition-exit-active {
     opacity: 0;

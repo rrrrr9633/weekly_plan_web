@@ -11,6 +11,7 @@ import { UserManagementPage } from '@/pages/UserManagementPage'
 import { ProjectManagementPage } from '@/pages/ProjectManagementPage'
 import { ArchivedPlansPage } from '@/pages/ArchivedPlansPage'
 import { ProfilePage } from '@/pages/ProfilePage'
+import { CompanyManagementPage } from '@/pages/CompanyManagementPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,7 +31,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore()
   if (!user) return <Navigate to="/login" replace />
-  if (user.role !== 'admin') return <Navigate to={getRoleHomePath(user)} replace />
+  if (user.role !== 'admin' && user.role !== 'super_admin') return <Navigate to={getRoleHomePath(user)} replace />
   return <>{children}</>
 }
 
@@ -78,6 +79,14 @@ function AppRoutes() {
               <ProtectedRoute>
                 <BoardPage />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/companies"
+            element={
+              <AdminRoute>
+                <CompanyManagementPage />
+              </AdminRoute>
             }
           />
           <Route

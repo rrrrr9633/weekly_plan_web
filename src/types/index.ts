@@ -2,8 +2,16 @@ export interface User {
   id: string
   username: string
   displayName?: string
-  role: 'admin' | 'user'
+  role: 'admin' | 'user' | 'super_admin'
+  companyId?: string
+  companyName?: string
   createdAt: string
+}
+
+export interface Company {
+  id: string
+  code: string
+  name: string
 }
 
 export interface Project {
@@ -52,6 +60,7 @@ export interface WeekPlan {
   weekEnd: string
   content: string
   assignedBy?: string
+  assignedByUserId?: string
   isAssigned: boolean
   createdAt: string
   updatedAt: string

@@ -1,13 +1,16 @@
-import { Calendar, FileText, User, X } from 'lucide-react'
+import { Archive, Calendar, FileText, Pencil, Trash2, User, X } from 'lucide-react'
 import { PLAN_WEEKDAY_OPTIONS } from '@/types'
 import type { WeekPlan } from '@/types'
 
 interface PlanDetailModalProps {
   plan?: WeekPlan
   onClose: () => void
+  onEdit?: (plan: WeekPlan) => void
+  onArchive?: (plan: WeekPlan) => void
+  onDelete?: (plan: WeekPlan) => void
 }
 
-export function PlanDetailModal({ plan, onClose }: PlanDetailModalProps) {
+export function PlanDetailModal({ plan, onClose, onEdit, onArchive, onDelete }: PlanDetailModalProps) {
   if (!plan) return null
 
   return (
@@ -53,6 +56,14 @@ export function PlanDetailModal({ plan, onClose }: PlanDetailModalProps) {
             <p className="whitespace-pre-wrap surface-3 rounded-[var(--radius-md)] p-[var(--spacing-md)] text-primary">{plan.content}</p>
           </div>
         </div>
+
+        {(onEdit || onArchive || onDelete) && (
+          <footer className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] px-[var(--spacing-xl)] py-[var(--spacing-md)]">
+            {onEdit && <button type="button" onClick={() => onEdit(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--accent)] hover:text-white transition-colors"><Pencil className="w-4 h-4" />编辑</button>}
+            {onArchive && <button type="button" onClick={() => onArchive(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] surface-3 hover:bg-[var(--status-warning)] hover:text-white transition-colors"><Archive className="w-4 h-4" />归档</button>}
+            {onDelete && <button type="button" onClick={() => onDelete(plan)} className="flex items-center gap-2 px-3 py-2 text-sm rounded-[var(--radius-md)] text-[var(--status-error)] hover:bg-[var(--status-error)] hover:text-white transition-colors"><Trash2 className="w-4 h-4" />删除</button>}
+          </footer>
+        )}
       </section>
     </div>
   )
