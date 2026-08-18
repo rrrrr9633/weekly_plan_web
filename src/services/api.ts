@@ -107,6 +107,28 @@ export interface AuthResponse {
   user: User
 }
 
+export interface AiProposalResponse {
+  id: string | number
+  operationType: string
+  status: string
+  payload: unknown
+  preview?: string | null
+  result?: unknown
+  error?: string | null
+  missingFields?: unknown
+}
+
+export interface AiContext {
+  projects?: Array<{ id: string | number; name: string; code?: string }>
+}
+
+export const aiApi = {
+  propose: (message: string) => api.post<AiProposalResponse>('/ai/proposals', { message }),
+  getContext: () => api.get<AiContext>('/ai/context'),
+  confirm: (id: string | number) => api.post<AiProposalResponse>(`/ai/proposals/${id}/confirm`),
+  getOperations: () => api.get<AiProposalResponse[]>('/ai/operations'),
+}
+
 // Auth API
 export const authApi = {
   login: (username: string, password: string) =>

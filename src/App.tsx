@@ -12,6 +12,7 @@ import { ProjectManagementPage } from '@/pages/ProjectManagementPage'
 import { ArchivedPlansPage } from '@/pages/ArchivedPlansPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { CompanyManagementPage } from '@/pages/CompanyManagementPage'
+import { AiAssistant } from '@/components/AiAssistant'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +48,7 @@ function AppRoutes() {
   return (
     <div className="min-h-screen">
       {user && <Sidebar />}
+      {user && <AiAssistant />}
       <AnimatePresence mode="wait">
         <Routes>
           <Route
