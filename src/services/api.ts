@@ -68,11 +68,11 @@ async function request<T>(
   return payload as T
 }
 
-async function download(path: string, filename: string): Promise<void> {
+async function download(path: string, filename: string, params?: Query): Promise<void> {
   const token = useAuthStore.getState().token
   const user = useAuthStore.getState().user
   const companyId = useTenantContextStore.getState().companyId
-  const response = await fetch(buildUrl(path), {
+  const response = await fetch(buildUrl(path, params), {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(user?.role === 'super_admin' && companyId ? { 'X-Company-Id': companyId } : {}),
@@ -150,7 +150,7 @@ export const projectApi = {
     api.post<Project>('/projects', data),
   update: (
     id: string,
-    data: Partial<{ name: string; description: string; status: Project['status'] }>
+    data: Partial<{ name: string; description: string; status: Project['status']; hidden: boolean }>
   ) => api.put<Project>(`/projects/${id}`, data),
   delete: (id: string) => api.delete<void>(`/projects/${id}`),
 }
@@ -165,8 +165,8 @@ export const weekPlanApi = {
   getMyPlans: (year: number, week: number) =>
     api.get<WeekPlan[]>(`/plans/my/${year}/${week}`),
 
-  exportMyWeekReport: (year: number, week: number) =>
-    download(`/plans/my/${year}/${week}/report`, `${year}年第${week}周个人周报.xlsx`),
+  exportMyWeekReport: (year: number, week: number, projectIds: string[]) =>
+    download(`/plans/my/${year}/${week}/report`, `${year}年第${week}周个人周报.xlsx`, { projectIds: projectIds.join(',') }),
 
   create: (data: {
     projectId: string

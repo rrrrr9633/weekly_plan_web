@@ -21,6 +21,7 @@ export interface Project {
   description?: string
   assistOrg?: string
   status: 'active' | 'inactive'
+  hidden: boolean
   createdAt: string
 }
 

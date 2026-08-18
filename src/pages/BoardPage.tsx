@@ -4,6 +4,7 @@ import { Search, Loader2, Users, FolderKanban, ZoomIn, ZoomOut, ChevronRight, Ch
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
 import { ProjectTimeline } from '@/components/ProjectTimeline'
+import { ProjectFilter } from '@/components/ProjectFilter'
 import { PlanDetailModal } from '@/components/PlanDetailModal'
 import { PlanModal } from '@/components/PlanModal'
 import { useWeekStore } from '@/store/weekStore'
@@ -28,7 +29,8 @@ export function BoardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<BoardViewMode>('user')
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({})
-  const [selectedProjectId, setSelectedProjectId] = useState('all')
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[] | null>([])
+  const selectedProjectId = selectedProjectIds?.length === 1 ? selectedProjectIds[0] : undefined
   const [timelineScale, setTimelineScale] = useState(0.65)
   const [manualOrders, setManualOrders] = useState<Record<string, string[]>>({})
   const pinchPointers = useRef(new Map<number, { x: number; y: number }>())
@@ -130,23 +132,27 @@ export function BoardPage() {
     )
   }, [plans, searchQuery])
 
+  const filteredPlans = useMemo(
+    () => selectedProjectIds === null
+      ? []
+      : selectedProjectIds.length === 0
+        ? searchMatchedPlans.filter((plan) => !projects.find((project) => project.id === plan.projectId)?.hidden)
+        : searchMatchedPlans.filter((plan) => selectedProjectIds.includes(plan.projectId)),
+    [projects, searchMatchedPlans, selectedProjectIds]
+  )
+
   const projectPlans = useMemo(
-    () => sortPlansByWeekday(
-      selectedProjectId === 'all'
-        ? searchMatchedPlans
-        : searchMatchedPlans.filter((plan) => plan.projectId === selectedProjectId),
-      true
-    ),
-    [searchMatchedPlans, selectedProjectId]
+    () => sortPlansByWeekday(filteredPlans, true),
+    [filteredPlans]
   )
 
   const plansByUser = useMemo(() => {
-    const groups = searchMatchedPlans.reduce<Record<string, WeekPlan[]>>((result, plan) => {
+    const groups = filteredPlans.reduce<Record<string, WeekPlan[]>>((result, plan) => {
       result[plan.userId] = [...(result[plan.userId] ?? []), plan]
       return result
     }, {})
     return Object.entries(groups).map(([userId, userPlans]) => [userId, sortPlansByWeekday(userPlans)] as const)
-  }, [searchMatchedPlans])
+  }, [filteredPlans])
 
   const plansByWeekday = useMemo(() => projectPlans.reduce<Record<PlanWeekday, WeekPlan[]>>(
     (groups, plan) => ({ ...groups, [plan.weekday]: [...groups[plan.weekday], plan] }),
@@ -155,14 +161,14 @@ export function BoardPage() {
 
   const orderedDayPlans = (weekday: PlanWeekday) => {
     const dayPlans = plansByWeekday[weekday]
-    const orderKey = `${selectedProjectId}:${weekday}`
+    const orderKey = `${selectedProjectId ?? 'all'}:${weekday}`
     const order = manualOrders[orderKey]
     if (!order) return dayPlans
     return [...dayPlans].sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id))
   }
 
   const saveDayOrder = (weekday: PlanWeekday, planIds: string[]) => {
-    if (selectedProjectId === 'all') return
+    if (!selectedProjectId) return
     const orderKey = `${selectedProjectId}:${weekday}`
     setManualOrders((orders) => ({ ...orders, [orderKey]: planIds }))
     saveOrder.mutate({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday, planIds })
@@ -209,7 +215,7 @@ export function BoardPage() {
   }
 
   const restoreAllDays = async () => {
-    if (selectedProjectId === 'all') return
+    if (!selectedProjectId) return
     await Promise.all(timelineDays.map((weekday) => weekPlanApi.restoreBoardOrder({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday })))
     setManualOrders({})
     queryClient.invalidateQueries({ queryKey: ['weekPlans', currentYear, currentWeek, companyId] })
@@ -232,9 +238,6 @@ export function BoardPage() {
     if (confirm('确定要删除这条计划吗？')) deletePlan.mutate(plan.id)
   }
 
-  const displayedPlans = viewMode === 'user' ? searchMatchedPlans : projectPlans
-  const emptyMessage = searchQuery ? '未找到匹配的计划' : '本周暂无团队计划'
-
   return (
     <PageTransition>
       <div className="min-h-screen ml-64 p-[var(--spacing-2xl)]">
@@ -252,7 +255,7 @@ export function BoardPage() {
               <button type="button" onClick={() => setViewMode('user')} className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'user' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
                 <Users className="w-4 h-4" />按人员
               </button>
-              <button type="button" onClick={() => { setViewMode('project'); if (selectedProjectId === 'all' && projects[0]) setSelectedProjectId(projects[0].id) }} className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'project' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
+              <button type="button" onClick={() => setViewMode('project')} className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-[var(--radius-full)] text-sm transition-colors flex items-center gap-2 ${viewMode === 'project' ? 'bg-[var(--accent)] text-white' : 'text-secondary hover:text-primary'}`}>
                 <FolderKanban className="w-4 h-4" />按项目
               </button>
             </div>
@@ -268,11 +271,25 @@ export function BoardPage() {
             <div className="card text-secondary">请先在侧边栏选择要查看的公司。</div>
           ) : isLoading ? (
             <div className="flex items-center justify-center py-[var(--spacing-2xl)]"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-          ) : displayedPlans.length === 0 ? (
-            <div className="text-center py-[var(--spacing-2xl)]"><p className="text-secondary">{emptyMessage}</p></div>
           ) : viewMode === 'user' ? (
-            <div className="space-y-[var(--spacing-2xl)]">
-              {plansByUser.map(([userId, userPlans]) => {
+            <div className="space-y-[var(--spacing-lg)]">
+              <div className="flex justify-end">
+                <ProjectFilter
+                  projects={projects}
+                  selectedProjectIds={selectedProjectIds}
+                  onChange={setSelectedProjectIds}
+                />
+              </div>
+              {plansByUser.length === 0 ? (
+                <ProjectTimeline
+                  plans={[]}
+                  projects={projects}
+                  selectedProjectIds={selectedProjectIds}
+                  onProjectFilterChange={setSelectedProjectIds}
+                  showProjectFilter={false}
+                  onView={setViewingPlan}
+                />
+              ) : plansByUser.map(([userId, userPlans]) => {
                 const isExpanded = expandedUsers[userId] === true
                 return (
                 <div key={userId} className="space-y-[var(--spacing-md)]">
@@ -287,7 +304,13 @@ export function BoardPage() {
                     <ChevronRight className={`w-5 h-5 text-secondary transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                   </button>
                   {isExpanded && (
-                    <ProjectTimeline plans={userPlans} onView={setViewingPlan} />
+                    <ProjectTimeline
+                      plans={userPlans}
+                      projects={projects}
+                      selectedProjectIds={selectedProjectIds}
+                      onProjectFilterChange={setSelectedProjectIds}
+                      onView={setViewingPlan}
+                    />
                   )}
                 </div>
                 )
@@ -295,7 +318,7 @@ export function BoardPage() {
             </div>
           ) : (
             <motion.section
-              key={`${selectedProjectId}:${currentYear}:${currentWeek}`}
+              key={`${selectedProjectIds?.join(':') || 'none'}:${currentYear}:${currentWeek}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
@@ -308,15 +331,11 @@ export function BoardPage() {
                   <p className="text-sm text-secondary">待定优先，其余计划按周内日期向右推进</p>
                 </div>
                 <div className="ml-auto flex min-w-0 items-center gap-2">
-                  <select
-                    value={selectedProjectId}
-                    onChange={(event) => setSelectedProjectId(event.target.value)}
-                    aria-label="选择项目"
-                    className="w-80 max-w-[32vw] truncate px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-full)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors"
-                  >
-                    <option value="all">全部项目</option>
-                    {projects.map((project) => <option key={project.id} value={project.id}>[{project.code}] {project.name}</option>)}
-                  </select>
+                  <ProjectFilter
+                    projects={projects}
+                    selectedProjectIds={selectedProjectIds}
+                    onChange={setSelectedProjectIds}
+                  />
                   <div className="flex shrink-0 items-center gap-2" aria-label="缩放时间流">
                   <button type="button" onClick={() => setTimelineScale((scale) => Math.max(0.65, Number((scale - 0.15).toFixed(2))))} disabled={timelineScale <= 0.65} className="timeline-zoom-button" title="缩小总览">
                     <ZoomOut className="w-4 h-4" />
@@ -326,7 +345,7 @@ export function BoardPage() {
                     <ZoomIn className="w-4 h-4" />
                   </button>
                   <button type="button" onClick={() => setTimelineScale(0.65)} className="timeline-reset-button" title="恢复默认缩放">65%</button>
-                  {!isSuperAdmin && selectedProjectId !== 'all' && (
+                  {!isSuperAdmin && selectedProjectId !== undefined && (
                     <button type="button" onClick={restoreAllDays} className="timeline-reset-button" title="恢复当前项目的默认排序">
                       <RotateCcw className="w-3.5 h-3.5" />恢复排序
                     </button>
@@ -352,7 +371,7 @@ export function BoardPage() {
                         <button type="button" className="timeline-day-fullscreen" onClick={() => setExpandedDay(weekday)} aria-label={`全屏查看${weekdayLabels[weekday]}计划`} title="全屏总览">
                           <Maximize2 className="w-3.5 h-3.5" />
                         </button>
-                        {!isSuperAdmin && selectedProjectId !== 'all' && plansByWeekday[weekday].length > 0 && (
+                        {!isSuperAdmin && selectedProjectId !== undefined && plansByWeekday[weekday].length > 0 && (
                           <button type="button" className="timeline-day-reset" onClick={() => restoreOrder.mutate({ projectId: selectedProjectId, year: currentYear, weekNumber: currentWeek, weekday })} title={`恢复${weekdayLabels[weekday]}默认排列`}>
                             <RotateCcw className="w-3 h-3" />
                           </button>
@@ -372,7 +391,7 @@ export function BoardPage() {
                               <span className="timeline-bubble-user">{plan.displayName || plan.username}</span>
                               {plan.status === 'archived' && <span className="timeline-bubble-status">已归档</span>}
                             </button>
-                            {!isSuperAdmin && selectedProjectId !== 'all' && (
+                            {!isSuperAdmin && selectedProjectId !== undefined && (
                               <div className="timeline-bubble-order-actions" aria-label="调整排序">
                                 <button type="button" onClick={() => movePlan(weekday, plan.id, -1)} disabled={orderedDayPlans(weekday).findIndex((item) => item.id === plan.id) === 0 || saveOrder.isPending} title="向上移动一格" aria-label="向上移动一格">
                                   <ChevronUp className="w-3.5 h-3.5" />
@@ -433,9 +452,9 @@ export function BoardPage() {
         onDelete={viewingPlan && canManagePlan(viewingPlan) ? deleteAssignedPlan : undefined}
         onClaim={viewingPlan && !isSuperAdmin && !viewingPlan.participants.some((participant) => participant.userId === currentUser?.id) ? (plan) => claimPlan.mutate(plan.id) : undefined}
         onLeave={viewingPlan && !isSuperAdmin && viewingPlan.participants.some((participant) => participant.userId === currentUser?.id && !participant.responsible) ? (plan) => leavePlan.mutate(plan.id) : undefined}
-        sortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? Math.max(1, orderedDayPlans(viewingPlan.weekday).findIndex((plan) => plan.id === viewingPlan.id) + 1) : undefined}
-        maxSortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? orderedDayPlans(viewingPlan.weekday).length : undefined}
-        onSortPositionChange={viewingPlan && !isSuperAdmin && selectedProjectId !== 'all' ? movePlanToPosition : undefined}
+        sortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== undefined ? Math.max(1, orderedDayPlans(viewingPlan.weekday).findIndex((plan) => plan.id === viewingPlan.id) + 1) : undefined}
+        maxSortPosition={viewingPlan && !isSuperAdmin && selectedProjectId !== undefined ? orderedDayPlans(viewingPlan.weekday).length : undefined}
+        onSortPositionChange={viewingPlan && !isSuperAdmin && selectedProjectId !== undefined ? movePlanToPosition : undefined}
       />
       <PlanModal
         isOpen={isPlanModalOpen}

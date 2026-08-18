@@ -2,10 +2,15 @@ import { useState, type CSSProperties } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { sortPlansByWeekday } from '@/lib/planSort'
-import { PLAN_WEEKDAY_OPTIONS, type PlanWeekday, type WeekPlan } from '@/types'
+import { ProjectFilter } from '@/components/ProjectFilter'
+import { PLAN_WEEKDAY_OPTIONS, type PlanWeekday, type Project, type WeekPlan } from '@/types'
 
 type ProjectTimelineProps = {
   plans: WeekPlan[]
+  projects: Project[]
+  selectedProjectIds: string[] | null
+  onProjectFilterChange: (projectIds: string[] | null) => void
+  showProjectFilter?: boolean
   showUser?: boolean
   onView: (plan: WeekPlan) => void
 }
@@ -13,7 +18,15 @@ type ProjectTimelineProps = {
 const timelineDays: PlanWeekday[] = ['pending', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 const weekdayLabels = Object.fromEntries(PLAN_WEEKDAY_OPTIONS.map(({ value, label }) => [value, label])) as Record<PlanWeekday, string>
 
-export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimelineProps) {
+export function ProjectTimeline({
+  plans,
+  projects,
+  selectedProjectIds,
+  onProjectFilterChange,
+  showProjectFilter = true,
+  showUser = true,
+  onView,
+}: ProjectTimelineProps) {
   const [expandedDay, setExpandedDay] = useState<PlanWeekday | null>(null)
   const [timelineScale, setTimelineScale] = useState(0.65)
   const plansByWeekday = timelineDays.reduce<Record<PlanWeekday, WeekPlan[]>>(
@@ -25,7 +38,15 @@ export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimel
     <section className="timeline-shell project-timeline-shell" aria-label="项目计划时间流">
       <div className="timeline-toolbar">
         <p className="text-sm text-secondary">缩放时间流</p>
-        <div className="ml-auto flex shrink-0 items-center gap-2" aria-label="缩放时间流">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
+          {showProjectFilter && (
+            <ProjectFilter
+              projects={projects}
+              selectedProjectIds={selectedProjectIds}
+              onChange={onProjectFilterChange}
+            />
+          )}
+        <div className="flex shrink-0 items-center gap-2" aria-label="缩放时间流">
           <button type="button" onClick={() => setTimelineScale((scale) => Math.max(0.65, Number((scale - 0.15).toFixed(2))))} disabled={timelineScale <= 0.65} className="timeline-zoom-button" title="缩小总览" aria-label="缩小总览">
             <ZoomOut className="w-4 h-4" />
           </button>
@@ -34,6 +55,7 @@ export function ProjectTimeline({ plans, showUser = true, onView }: ProjectTimel
             <ZoomIn className="w-4 h-4" />
           </button>
           <button type="button" onClick={() => setTimelineScale(0.65)} className="timeline-reset-button" title="恢复默认缩放">65%</button>
+        </div>
         </div>
       </div>
       <div className="timeline-scroll-shell">

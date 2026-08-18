@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Loader2, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Loader2, Edit2, Trash2, Eye, EyeOff } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
 import { PageTransition } from '@/components/layout/PageTransition'
-import { projectApi } from '@/services/api'
+import { projectApi, ApiError } from '@/services/api'
 import type { Project } from '@/types'
 import { motion } from 'framer-motion'
 
@@ -12,6 +12,7 @@ export function ProjectManagementPage() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | undefined>()
+  const [visibilityError, setVisibilityError] = useState<string | undefined>()
   const isSuperAdmin = useAuthStore((state) => state.user?.role === 'super_admin')
   const companyId = useTenantContextStore((state) => state.companyId)
   const hasCompanyContext = !isSuperAdmin || Boolean(companyId)
@@ -26,6 +27,20 @@ export function ProjectManagementPage() {
     mutationFn: projectApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+
+  const visibilityMutation = useMutation({
+    mutationFn: ({ id, hidden }: Pick<Project, 'id' | 'hidden'>) => projectApi.update(id, { hidden }),
+    onSuccess: (updatedProject) => {
+      setVisibilityError(undefined)
+      queryClient.setQueryData<Project[]>(['projects', companyId], (cached = []) =>
+        cached.map((project) => project.id === updatedProject.id ? updatedProject : project)
+      )
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (error) => {
+      setVisibilityError(error instanceof ApiError ? error.message : '隐藏项目失败，请确认后端已部署隐藏字段支持')
     },
   })
 
@@ -49,6 +64,12 @@ export function ProjectManagementPage() {
               添加项目
             </button>}
           </div>
+
+          {visibilityError && (
+            <div role="alert" className="mb-[var(--spacing-lg)] rounded-[var(--radius-md)] bg-[var(--status-error)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] text-sm text-[var(--status-error)]">
+              {visibilityError}
+            </div>
+          )}
 
           {!hasCompanyContext ? (
             <div className="card text-secondary">请先在侧边栏选择要查看的公司。</div>
@@ -80,6 +101,11 @@ export function ProjectManagementPage() {
                         >
                           {project.status === 'active' ? '进行中' : '已结束'}
                         </span>
+                        {project.hidden && (
+                          <span className="inline-block px-2 py-1 text-xs rounded-[var(--radius-sm)] bg-[var(--surface-4)] text-secondary font-medium">
+                            已隐藏
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-bold text-lg mb-1">{project.name}</h3>
                       {project.description && (
@@ -101,6 +127,14 @@ export function ProjectManagementPage() {
                     >
                       <Edit2 className="w-3 h-3" />
                       编辑
+                    </button>
+                    <button
+                      onClick={() => visibilityMutation.mutate({ id: project.id, hidden: !project.hidden })}
+                      disabled={visibilityMutation.isPending}
+                      className="flex items-center gap-1 text-xs px-3 py-1 rounded-[var(--radius-full)] surface-3 hover:bg-[var(--surface-4)] transition-all"
+                    >
+                      {project.hidden ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      {project.hidden ? '取消隐藏' : '隐藏'}
                     </button>
                     <button
                       onClick={() => handleDelete(project.id)}

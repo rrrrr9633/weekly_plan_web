@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Loader2, Edit2, Trash2, CalendarPlus } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
@@ -148,6 +148,9 @@ export function UserManagementPage() {
                     <th className="text-left py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
                       用户名
                     </th>
+                    <th className="text-left py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
+                      姓名
+                    </th>
                     {isSuperAdmin && (
                       <th className="text-left py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
                         所属公司
@@ -168,7 +171,7 @@ export function UserManagementPage() {
                 <tbody key={group.id}>
                   {isSuperAdmin && (
                     <tr className="border-y border-[var(--border)] bg-[var(--surface-3)]">
-                      <td colSpan={5} className="px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-sm font-semibold text-accent">
+                      <td colSpan={isSuperAdmin ? 6 : 5} className="px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-sm font-semibold text-accent">
                         {group.name} · {group.users.length} 名用户
                       </td>
                     </tr>
@@ -182,6 +185,9 @@ export function UserManagementPage() {
                     >
                       <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)] font-medium">
                         {user.username}
+                      </td>
+                      <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)]">
+                        {user.displayName || user.username}
                       </td>
                       {isSuperAdmin && <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)]">
                         {user.role === 'super_admin' ? <span className="text-secondary text-sm">未绑定</span> : <select value={user.companyId ?? ''} disabled={moveCompanyMutation.isPending} onChange={(event) => handleMoveCompany(user, event.target.value)} className="max-w-40 px-2 py-1 surface-3 rounded border border-[var(--border)] text-sm disabled:cursor-not-allowed disabled:opacity-60">
@@ -281,6 +287,14 @@ function UserModal({
   const [role, setRole] = useState(editingUser?.role || 'user')
   const [formError, setFormError] = useState<string | null>(null)
 
+  useEffect(() => {
+    setUsername(editingUser?.username || '')
+    setDisplayName(editingUser?.displayName || editingUser?.username || '')
+    setRole(editingUser?.role || 'user')
+    setPassword('')
+    setFormError(null)
+  }, [editingUser])
+
   const createMutation = useMutation({
     mutationFn: (data: { username: string; password: string; role: User['role'] }) =>
       userApi.create(data),
@@ -294,7 +308,10 @@ function UserModal({
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { username: string; displayName: string; role: User['role'] } }) =>
       userApi.update(id, data),
-    onSuccess: () => {
+    onSuccess: (updatedUser: User) => {
+      queryClient.setQueriesData<User[]>({ queryKey: ['users'] }, (currentUsers) =>
+        currentUsers?.map((user) => user.id === updatedUser.id ? updatedUser : user)
+      )
       queryClient.invalidateQueries({ queryKey: ['users'] })
       onClose()
     },
@@ -304,10 +321,22 @@ function UserModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
+
+    const nextUsername = username.trim()
+    const nextDisplayName = displayName.trim()
+    if (!nextUsername) {
+      setFormError('用户名不能为空')
+      return
+    }
+    if (nextDisplayName.length < 2 || nextDisplayName.length > 30) {
+      setFormError('姓名长度应为 2–30 个字符')
+      return
+    }
+
     if (editingUser) {
-      updateMutation.mutate({ id: editingUser.id, data: { username, displayName, role } })
+      updateMutation.mutate({ id: editingUser.id, data: { username: nextUsername, displayName: nextDisplayName, role } })
     } else {
-      createMutation.mutate({ username, password, role })
+      createMutation.mutate({ username: nextUsername, password, role })
     }
   }
 
@@ -324,7 +353,7 @@ function UserModal({
           {editingUser ? '编辑用户' : '添加用户'}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-[var(--spacing-lg)]">
+        <form onSubmit={handleSubmit} noValidate className="space-y-[var(--spacing-lg)]">
           {formError && (
             <p role="alert" className="rounded-[var(--radius-md)] border border-[var(--status-error)]/40 bg-[var(--status-error)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] text-sm text-[var(--status-error)]">
               {formError}
@@ -387,8 +416,8 @@ function UserModal({
             >
               取消
             </button>
-            <button type="submit" className="flex-1 btn-primary">
-              {editingUser ? '保存' : '创建'}
+            <button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="flex-1 btn-primary disabled:cursor-not-allowed disabled:opacity-60">
+              {createMutation.isPending || updateMutation.isPending ? '保存中…' : editingUser ? '保存' : '创建'}
             </button>
           </div>
         </form>
