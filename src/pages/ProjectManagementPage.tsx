@@ -91,7 +91,7 @@ export function ProjectManagementPage() {
                     </div>
                   </div>
 
-                  {!isSuperAdmin && <div className="flex gap-2 pt-[var(--spacing-md)] border-t border-[var(--border)] opacity-0 group-hover:opacity-100 transition-opacity">
+                  {hasCompanyContext && <div className="flex gap-2 pt-[var(--spacing-md)] border-t border-[var(--border)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => {
                         setEditingProject(project)
@@ -117,7 +117,7 @@ export function ProjectManagementPage() {
         </div>
       </div>
 
-      {!isSuperAdmin && <ProjectModal
+      {hasCompanyContext && <ProjectModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)

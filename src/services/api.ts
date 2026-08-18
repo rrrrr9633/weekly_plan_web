@@ -135,7 +135,7 @@ export const userApi = {
   getById: (id: string) => api.get<User>(`/users/${id}`),
   create: (data: { username: string; password: string; role: User['role'] }) =>
     api.post<User>('/users', data),
-  update: (id: string, data: Partial<{ username: string; role: User['role'] }>) =>
+  update: (id: string, data: { username: string; displayName: string; role: User['role'] }) =>
     api.put<User>(`/users/${id}`, data),
   delete: (id: string) => api.delete<void>(`/users/${id}`),
   moveToCompany: (id: string, companyId: string) =>

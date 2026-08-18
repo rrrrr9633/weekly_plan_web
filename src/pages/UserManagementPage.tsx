@@ -37,7 +37,7 @@ export function UserManagementPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: projectApi.getAll,
-    enabled: !isSuperAdmin,
+    enabled: hasCompanyContext,
   })
   const userGroups = useMemo(() => {
     if (!isSuperAdmin) return [{ id: 'current-company', name: '', users }]
@@ -159,7 +159,7 @@ export function UserManagementPage() {
                     <th className="text-left py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
                       创建时间
                     </th>
-                    {!isSuperAdmin && <th className="text-right py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
+                    {hasCompanyContext && <th className="text-right py-[var(--spacing-md)] px-[var(--spacing-lg)] text-sm font-semibold text-secondary">
                       操作
                     </th>}
                   </tr>
@@ -204,7 +204,7 @@ export function UserManagementPage() {
                       <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)] text-secondary text-sm">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
-                      {!isSuperAdmin && <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)] text-right">
+                      {hasCompanyContext && <td className="py-[var(--spacing-md)] px-[var(--spacing-lg)] text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => setAssigningUser(user)}
@@ -240,7 +240,7 @@ export function UserManagementPage() {
         </div>
       </div>
 
-      {!isSuperAdmin && <UserModal
+      {hasCompanyContext && <UserModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
@@ -249,7 +249,7 @@ export function UserManagementPage() {
         editingUser={editingUser}
       />}
 
-      {!isSuperAdmin && assigningUser && (
+      {hasCompanyContext && assigningUser && (
         <PlanModal
           isOpen
           onClose={() => setAssigningUser(undefined)}
@@ -276,6 +276,7 @@ function UserModal({
 }) {
   const queryClient = useQueryClient()
   const [username, setUsername] = useState(editingUser?.username || '')
+  const [displayName, setDisplayName] = useState(editingUser?.displayName || editingUser?.username || '')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState(editingUser?.role || 'user')
   const [formError, setFormError] = useState<string | null>(null)
@@ -291,19 +292,20 @@ function UserModal({
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { username: string; role: User['role'] } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { username: string; displayName: string; role: User['role'] } }) =>
       userApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       onClose()
     },
+    onError: (error: Error) => setFormError(error.message),
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setFormError(null)
     if (editingUser) {
-      updateMutation.mutate({ id: editingUser.id, data: { username, role } })
+      updateMutation.mutate({ id: editingUser.id, data: { username, displayName, role } })
     } else {
       createMutation.mutate({ username, password, role })
     }
@@ -335,6 +337,19 @@ function UserModal({
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">姓名</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none"
+              minLength={2}
+              maxLength={30}
               required
             />
           </div>

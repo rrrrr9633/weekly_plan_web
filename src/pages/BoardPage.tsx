@@ -216,7 +216,7 @@ export function BoardPage() {
   }
 
   const canManagePlan = (plan: WeekPlan) =>
-    !isSuperAdmin && plan.participants.some((participant) => participant.userId === currentUser?.id)
+    (isSuperAdmin && hasCompanyContext) || plan.participants.some((participant) => participant.userId === currentUser?.id)
 
   const editAssignedPlan = (plan: WeekPlan) => {
     setViewingPlan(undefined)
