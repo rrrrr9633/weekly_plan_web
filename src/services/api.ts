@@ -3,7 +3,7 @@ import { useTenantContextStore } from '@/store/tenantContextStore'
 import type { Company, Project, User, WeekPlan } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tianxiadiyi.xyz/api'
-const TIMEOUT_MS = 10000
+const TIMEOUT_MS = 190_000
 const toApiWeekday = (weekday: WeekPlan['weekday']) => weekday.toUpperCase()
 
 type Query = Record<string, string | number | boolean | undefined | null>
@@ -111,11 +111,33 @@ export interface AiProposalResponse {
   id: string | number
   operationType: string
   status: string
-  payload: unknown
   preview?: string | null
-  result?: unknown
+  message?: string | null
   error?: string | null
   missingFields?: unknown
+  conversationId?: string | number | null
+}
+
+export interface AiConversationSummary {
+  id: string | number
+  title: string
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
+}
+
+export interface AiConversationDetail {
+  conversation: AiConversationSummary
+  messages: Array<{ id: string | number; sender: 'USER' | 'ASSISTANT'; content: string; proposalId?: string | number | null; createdAt: string }>
+}
+
+export interface AiMemory {
+  id: string | number
+  actorUserId: string | number
+  actorDisplayName: string
+  operationType: string
+  summary: string
+  createdAt: string
 }
 
 export interface AiContext {
@@ -123,10 +145,17 @@ export interface AiContext {
 }
 
 export const aiApi = {
-  propose: (message: string) => api.post<AiProposalResponse>('/ai/proposals', { message }),
+  propose: (message: string, conversationId?: string | number | null) => api.post<AiProposalResponse>('/ai/proposals', { message, conversationId }),
   getContext: () => api.get<AiContext>('/ai/context'),
   confirm: (id: string | number) => api.post<AiProposalResponse>(`/ai/proposals/${id}/confirm`),
+  supplement: (id: string | number, fields: Record<string, string>) => api.post<AiProposalResponse>(`/ai/proposals/${id}/supplement`, { fields }),
   getOperations: () => api.get<AiProposalResponse[]>('/ai/operations'),
+  deleteOperation: (id: string | number) => api.delete<void>(`/ai/operations/${id}`),
+  getMemories: () => api.get<AiMemory[]>('/ai/memories'),
+  getConversations: () => api.get<AiConversationSummary[]>('/ai/conversations'),
+  createConversation: (title?: string) => api.post<AiConversationDetail>('/ai/conversations', { title }),
+  getConversation: (id: string | number) => api.get<AiConversationDetail>(`/ai/conversations/${id}`),
+  deleteConversation: (id: string | number) => api.delete<void>(`/ai/conversations/${id}`),
 }
 
 // Auth API

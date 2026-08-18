@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, ChevronDown, Loader2, Send, ShieldAlert, Trash2, X } from 'lucide-react'
+import { Bot, ChevronDown, History, Loader2, MessageSquarePlus, Send, ShieldAlert, Trash2, X } from 'lucide-react'
 import { aiApi, ApiError, type AiProposalResponse } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 
 type FieldValues = Record<string, string>
 type ProjectCandidate = { id: string | number; name: string; code?: string }
-
-function stringify(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'string') return value
-  return JSON.stringify(value, null, 2)
-}
 
 function missingFieldNames(proposal?: AiProposalResponse): string[] {
   const missing = proposal?.missingFields
@@ -60,7 +54,20 @@ export function AiAssistant() {
   const [proposal, setProposal] = useState<AiProposalResponse>()
   const [fields, setFields] = useState<FieldValues>({})
   const [error, setError] = useState<string>()
+  const [conversationId, setConversationId] = useState<string | number | null>(null)
+  const [showMemories, setShowMemories] = useState(false)
   const [deleteConfirmed, setDeleteConfirmed] = useState(false)
+  const { data: conversationList = [] } = useQuery({
+    queryKey: ['aiConversations'], queryFn: aiApi.getConversations, enabled: open && Boolean(user),
+  })
+  const { data: memories = [] } = useQuery({
+    queryKey: ['aiMemories'], queryFn: aiApi.getMemories, enabled: open && showMemories && Boolean(user),
+  })
+  const { data: currentConversation } = useQuery({
+    queryKey: ['aiConversation', conversationId],
+    queryFn: () => aiApi.getConversation(conversationId!),
+    enabled: open && conversationId !== null && Boolean(user),
+  })
   const { data: context } = useQuery({
     queryKey: ['aiContext'],
     queryFn: aiApi.getContext,
@@ -82,9 +89,15 @@ export function AiAssistant() {
   }, [open])
 
   const proposalMutation = useMutation({
-    mutationFn: aiApi.propose,
+    mutationFn: (nextMessage?: string) => aiApi.propose(nextMessage ?? message.trim(), conversationId),
     onSuccess: (response) => {
       setProposal(response)
+      setMessage('')
+      if (response.conversationId) {
+        setConversationId(response.conversationId)
+        void queryClient.invalidateQueries({ queryKey: ['aiConversation', response.conversationId] })
+      }
+      void queryClient.invalidateQueries({ queryKey: ['aiConversations'] })
       setError(response.error ?? undefined)
       setDeleteConfirmed(false)
     },
@@ -119,7 +132,7 @@ export function AiAssistant() {
     setError(undefined)
     setProposal(undefined)
     setFields({})
-    proposalMutation.mutate(trimmed)
+    proposalMutation.mutate(undefined)
   }
 
   const submitMissing = () => {
@@ -128,9 +141,29 @@ export function AiAssistant() {
       setError(`请补充${fieldLabel(incomplete)}。`)
       return
     }
-    const additions = missingFields.map((field) => `${fieldLabel(field)}：${fields[field]}`).join('；')
+    const fieldsToSupplement = missingFields.reduce<Record<string, string>>((result, field) => ({ ...result, [field]: fields[field] }), {})
     setError(undefined)
-    proposalMutation.mutate(`${message.trim()}\n补充信息：${additions}`)
+    void aiApi.supplement(proposal!.id, fieldsToSupplement).then((response) => {
+      setProposal(response)
+      setError(response.error ?? undefined)
+    }).catch((requestError: unknown) => {
+      setError(requestError instanceof ApiError ? requestError.message : '补充信息失败，请稍后重试。')
+    })
+  }
+
+  const startConversation = async () => {
+    try {
+      const detail = await aiApi.createConversation()
+      setConversationId(detail.conversation.id)
+      setProposal(undefined)
+      setFields({})
+      setMessage('')
+      setShowMemories(false)
+      void queryClient.invalidateQueries({ queryKey: ['aiConversations'] })
+      queryClient.setQueryData(['aiConversation', detail.conversation.id], detail)
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : '无法创建新对话。')
+    }
   }
 
   return (
@@ -156,13 +189,19 @@ export function AiAssistant() {
             <div>
               <div className="mb-1 flex items-center gap-2 text-[var(--accent)]"><Bot className="h-5 w-5" /><span className="text-sm font-semibold">AI 计划助手</span></div>
               <h2 id="ai-assistant-title" className="text-xl">用自然语言管理计划</h2>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">仅管理您本人的计划；项目操作仅管理员可执行。</p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">AI 可分析本公司全部成员计划；写入仅管理您本人的计划，项目操作仅管理员可执行。</p>
             </div>
             <button type="button" onClick={() => setOpen(false)} aria-label="关闭" className="rounded-[var(--radius-sm)] p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-3)]"><X className="h-5 w-5" /></button>
           </header>
-
+          <div className="flex items-center gap-2 overflow-x-auto border-b px-4 py-2">
+            <button type="button" onClick={() => void startConversation()} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs"><MessageSquarePlus className="h-3.5 w-3.5" />新对话</button>
+            <button type="button" onClick={() => setShowMemories((value) => !value)} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-xs"><History className="h-3.5 w-3.5" />公共记忆</button>
+            {conversationList.map((item) => <div key={item.id} className={`flex shrink-0 items-center rounded-full border text-xs ${conversationId === item.id ? 'border-[var(--accent)] bg-[var(--accent)]/10' : ''}`}><button type="button" onClick={() => { setConversationId(item.id); setProposal(undefined); setShowMemories(false) }} className="max-w-28 truncate px-2 py-1">{item.title}</button><button type="button" aria-label={`删除对话 ${item.title}`} onClick={() => { if (window.confirm(`删除“${item.title}”及其中聊天记录？`)) void aiApi.deleteConversation(item.id).then(() => { if (conversationId === item.id) setConversationId(null); void queryClient.invalidateQueries({ queryKey: ['aiConversations'] }) }) }} className="px-1 text-[var(--text-secondary)]">×</button></div>)}
+          </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            {!proposal && !proposalMutation.isPending && <p className="rounded-[var(--radius-md)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-secondary)]">例如：“下周三为项目 A 添加用户访谈计划”或“查看本周我的计划”。AI 会先生成预览，写入前需要您确认。</p>}
+            {showMemories && <div className="mb-4 space-y-2"><p className="text-sm font-semibold">公司公共 AI 记忆</p>{memories.length === 0 ? <p className="text-sm text-[var(--text-secondary)]">暂无已确认的 AI 增删改记录。</p> : memories.map((item) => <div key={item.id} className="rounded-[var(--radius-md)] bg-[var(--surface-2)] p-3 text-sm"><span className="font-medium">{item.actorDisplayName}</span><span className="mx-1 text-xs text-[var(--text-secondary)]">{item.operationType}</span><span>{item.summary}</span></div>)}</div>}
+            {currentConversation?.messages.map((item) => <div key={item.id} className={`mb-3 flex ${item.sender === 'USER' ? 'justify-end' : 'justify-start'}`}><p className={`max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-md)] px-3 py-2 text-sm ${item.sender === 'USER' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--surface-2)] text-[var(--text-primary)]'}`}>{item.content}</p></div>)}
+            {!proposal && !proposalMutation.isPending && !currentConversation?.messages.length && <p className="rounded-[var(--radius-md)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-secondary)]">例如：“下周三为项目 A 添加用户访谈计划”或“查看本周我的计划”。AI 会先生成预览，写入前需要您确认。</p>}
             {proposalMutation.isPending && <div className="flex items-center gap-2 py-8 text-sm text-[var(--text-secondary)]"><Loader2 className="h-4 w-4 animate-spin" />正在理解您的请求…</div>}
             {error && <div role="alert" className="mb-4 rounded-[var(--radius-md)] bg-[var(--status-error)]/10 p-3 text-sm text-[var(--status-error)]">{error}</div>}
             {proposal && <div className="space-y-4">
@@ -170,7 +209,6 @@ export function AiAssistant() {
               <div className="rounded-[var(--radius-md)] bg-[var(--surface-2)] p-4">
                 <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs font-semibold text-[var(--text-secondary)]">{isQuery(proposal.operationType) ? '查询结果' : 'AI 操作预览'}</span><span className="rounded-full bg-white px-2 py-1 text-xs text-[var(--text-secondary)]">{proposal.operationType}</span></div>
                 <p className="whitespace-pre-wrap text-sm text-[var(--text-primary)]">{proposal.preview || (isQuery(proposal.operationType) ? '已完成只读查询。' : '已生成操作提案。')}</p>
-                {proposal.result !== undefined && <pre className="mt-3 max-h-48 overflow-auto rounded-[var(--radius-sm)] bg-slate-950 p-3 text-xs leading-5 text-slate-100">{stringify(proposal.result)}</pre>}
               </div>
 
               {hasMissingFields && <div className="rounded-[var(--radius-md)] border p-4">
