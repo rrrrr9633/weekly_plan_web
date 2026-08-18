@@ -87,7 +87,6 @@ export function PlanModal({ isOpen, onClose, onSubmit, projects, editingPlan, as
               onChange={(event) => setSelectedProject(event.target.value)}
               className="w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none transition-colors"
               required
-              disabled={!!editingPlan}
             >
               <option value="">请选择项目</option>
               {projects.filter((project) => project.status === 'active').map((project) => (

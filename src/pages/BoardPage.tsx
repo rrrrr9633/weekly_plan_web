@@ -78,8 +78,8 @@ export function BoardPage() {
     },
   })
   const updatePlan = useMutation({
-    mutationFn: ({ id, content, weekday }: { id: string; content: string; weekday: PlanWeekday }) =>
-      weekPlanApi.update(id, { content, weekday }),
+    mutationFn: ({ id, projectId, content, weekday }: { id: string; projectId: string; content: string; weekday: PlanWeekday }) =>
+      weekPlanApi.update(id, { projectId, content, weekday }),
     onSuccess: () => {
       setViewingPlan(undefined)
       setEditingPlan(undefined)
@@ -462,9 +462,9 @@ export function BoardPage() {
           setIsPlanModalOpen(false)
           setEditingPlan(undefined)
         }}
-        onSubmit={({ plans }) => {
+        onSubmit={({ projectId, plans }) => {
           const [plan] = plans
-          if (editingPlan && plan) updatePlan.mutate({ id: editingPlan.id, ...plan })
+          if (editingPlan && plan) updatePlan.mutate({ id: editingPlan.id, projectId, ...plan })
         }}
         projects={projects}
         editingPlan={editingPlan}

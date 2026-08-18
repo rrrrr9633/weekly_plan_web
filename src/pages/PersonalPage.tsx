@@ -72,8 +72,8 @@ export function PersonalPage() {
 
   // 更新计划
   const updateMutation = useMutation({
-    mutationFn: ({ id, content, weekday }: { id: string; content: string; weekday: WeekPlan['weekday'] }) =>
-      weekPlanApi.update(id, { content, weekday }),
+    mutationFn: ({ id, projectId, content, weekday }: { id: string; projectId: string; content: string; weekday: WeekPlan['weekday'] }) =>
+      weekPlanApi.update(id, { projectId, content, weekday }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myPlans'] })
       setIsModalOpen(false)
@@ -106,7 +106,7 @@ export function PersonalPage() {
   const handleSubmit = (data: { projectId: string; plans: Array<{ content: string; weekday: WeekPlan['weekday'] }> }) => {
     if (editingPlan) {
       const [plan] = data.plans
-      updateMutation.mutate({ id: editingPlan.id, content: plan.content, weekday: plan.weekday })
+      updateMutation.mutate({ id: editingPlan.id, projectId: data.projectId, content: plan.content, weekday: plan.weekday })
     } else {
       createMutation.mutate(data)
     }

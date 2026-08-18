@@ -186,7 +186,7 @@ export const weekPlanApi = {
     plans: data.plans.map((plan) => ({ ...plan, weekday: toApiWeekday(plan.weekday) })),
   }),
 
-  update: (id: string, data: { content: string; weekday: WeekPlan['weekday'] }) =>
+  update: (id: string, data: { projectId: string; content: string; weekday: WeekPlan['weekday'] }) =>
     api.put<WeekPlan>(`/plans/${id}`, { ...data, weekday: toApiWeekday(data.weekday) }),
 
   delete: (id: string) => api.delete<void>(`/plans/${id}`),
