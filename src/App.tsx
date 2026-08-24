@@ -14,6 +14,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { CompanyManagementPage } from '@/pages/CompanyManagementPage'
 import { ModuleManagementPage } from '@/pages/ModuleManagementPage'
 import { DiagnosisCalendarPage } from '@/pages/DiagnosisCalendarPage'
+import { PartnerResourcePage } from '@/pages/PartnerResourcePage'
 import { moduleApi } from '@/services/api'
 import { AiAssistant } from '@/components/AiAssistant'
 
@@ -96,8 +97,8 @@ function AppRoutes() {
               </ModuleRoute>
             }
           />
+          <Route path="/partner-resources" element={<ModuleRoute code="PARTNER_RESOURCE_MANAGEMENT"><PartnerResourcePage /></ModuleRoute>} />
           <Route
-            path="/personal"
             element={
               <ProtectedRoute>
                 <PersonalPage />

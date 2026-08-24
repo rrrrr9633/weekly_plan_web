@@ -117,6 +117,7 @@ export function ProjectManagementPage() {
                     </div>
                   </div>
 
+                  {hasCompanyContext && <ProjectPartnerResources projectId={project.id} />}
                   {hasCompanyContext && <div className="flex gap-2 pt-[var(--spacing-md)] border-t border-[var(--border)] opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => {
@@ -164,6 +165,12 @@ export function ProjectManagementPage() {
 }
 
 // 项目弹窗
+function ProjectPartnerResources({ projectId }: { projectId: string }) {
+  const { data: resources = [] } = useQuery({ queryKey: ['projectPartnerResources', projectId], queryFn: () => projectApi.getPartnerResources(projectId) })
+  if (!resources.length) return null
+  return <section className="mt-[var(--spacing-md)] border-t border-[var(--border)] pt-[var(--spacing-md)]"><p className="mb-2 text-xs font-medium text-secondary">关联合作资源</p><div className="flex flex-wrap gap-2">{resources.map((resource) => <span key={resource.id} title={resource.note || undefined} className="rounded-[var(--radius-full)] bg-teal-50 px-2 py-1 text-xs text-accent">{resource.name}{resource.cooperationRole && ` · ${resource.cooperationRole}`}</span>)}</div></section>
+}
+
 function ProjectModal({
   isOpen,
   onClose,

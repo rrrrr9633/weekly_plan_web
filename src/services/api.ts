@@ -209,10 +209,26 @@ export const diagnosisWorkApi = {
   delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
 }
 
+export const partnerResourceApi = {
+  getAll: () => api.get<import('@/types').PartnerResource[]>('/partner-resources'),
+  create: (data: Omit<import('@/types').PartnerResource, 'id' | 'ownerName' | 'createdAt'>) => api.post<import('@/types').PartnerResource>('/partner-resources', data),
+  update: (id: string, data: Omit<import('@/types').PartnerResource, 'id' | 'ownerName' | 'createdAt'>) => api.put<import('@/types').PartnerResource>(`/partner-resources/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/partner-resources/${id}`),
+  getContacts: (id: string) => api.get<Array<{ id: string; name: string; title?: string; phone?: string; wechat?: string; email?: string }>>(`/partner-resources/${id}/contacts`),
+  addContact: (id: string, data: { name: string; title?: string; phone?: string; wechat?: string; email?: string }) => api.post(`/partner-resources/${id}/contacts`, data),
+  deleteContact: (resourceId: string, id: string) => api.delete<void>(`/partner-resources/${resourceId}/contacts/${id}`),
+  getFollowUps: (id: string) => api.get<Array<{ id: string; content: string; followUpDate: string; createdByName: string }>>(`/partner-resources/${id}/follow-ups`),
+  addFollowUp: (id: string, data: { content: string; followUpDate: string }) => api.post(`/partner-resources/${id}/follow-ups`, data),
+  deleteFollowUp: (resourceId: string, id: string) => api.delete<void>(`/partner-resources/${resourceId}/follow-ups/${id}`),
+  getProjects: (id: string) => api.get<Array<{ id: string; code: string; name: string; cooperationRole?: string; note?: string }>>(`/partner-resources/${id}/projects`),
+  linkProject: (id: string, data: { projectId: number; cooperationRole?: string; note?: string }) => api.post(`/partner-resources/${id}/projects`, data),
+  unlinkProject: (id: string, projectId: string) => api.delete<void>(`/partner-resources/${id}/projects/${projectId}`),
+}
+
 // Project API
 export const projectApi = {
   getAll: () => api.get<Project[]>('/projects'),
-  getById: (id: string) => api.get<Project>(`/projects/${id}`),
+  getPartnerResources: (id: string) => api.get<Array<{ id: string; name: string; region?: string; cooperationStatus: string; cooperationRole?: string; note?: string; preferred: boolean }>>(`/projects/${id}/partner-resources`),
   create: (data: { name: string; code: string; description?: string; assistOrg?: string }) =>
     api.post<Project>('/projects', data),
   update: (

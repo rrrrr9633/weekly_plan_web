@@ -91,6 +91,25 @@ export interface FeatureModule {
   enabled: boolean
 }
 
+export interface PartnerResource {
+  id: string
+  name: string
+  website?: string
+  region?: string
+  introduction?: string
+  cooperationStatus: string
+  ownerName: string
+  nextFollowUpDate?: string
+  preferred: boolean
+  riskNote?: string
+  technicalScore?: number
+  commercialScore?: number
+  deliveryScore?: number
+  roles: string[]
+  tags: string[]
+  createdAt: string
+}
+
 export interface DiagnosisWork {
   id: string
   workDate: string
