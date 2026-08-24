@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Calendar, CalendarDays, Users, Settings, Archive, LogOut, UserRound, Building2, SlidersHorizontal } from 'lucide-react'
+import { Home, Calendar, CalendarDays, Users, Settings, Archive, LogOut, UserRound, Building2, SlidersHorizontal, Menu, X } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
 import { companyApi, moduleApi } from '@/services/api'
@@ -8,6 +9,7 @@ import { cn } from '@/lib/utils'
 
 export function Sidebar() {
   const location = useLocation()
+  const [isOpen, setIsOpen] = useState(false)
   const { user, isAdmin, logout } = useAuthStore()
   const companyId = useTenantContextStore((state) => state.companyId)
   const setCompanyId = useTenantContextStore((state) => state.setCompanyId)
@@ -23,6 +25,10 @@ export function Sidebar() {
     enabled: Boolean(user && !isSuperAdmin),
   })
   const hasDiagnosisCalendar = modules.some((module) => module.code === 'TEAM_DIAGNOSIS_CALENDAR' && module.enabled)
+
+  useEffect(() => {
+    setIsOpen(false)
+  }, [location.pathname])
 
   const navigation = [
     { name: '公司管理', href: '/admin/companies', icon: Building2, superAdminOnly: true },
@@ -42,9 +48,25 @@ export function Sidebar() {
   })
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 surface-2 border-r border-[var(--border)] flex flex-col">
+    <>
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="sidebar-menu-button"
+        aria-label="打开导航菜单"
+        aria-expanded={isOpen}
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      {isOpen && <button type="button" className="sidebar-backdrop" onClick={() => setIsOpen(false)} aria-label="关闭导航菜单" />}
+      <aside className={cn('sidebar fixed left-0 top-0 z-50 flex h-screen w-64 flex-col border-r border-[var(--border)] surface-2', isOpen && 'sidebar-open')}>
       <div className="p-[var(--spacing-xl)] border-b border-[var(--border)]">
-        <h1 className="text-xl font-bold text-accent">周计划系统</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-bold text-accent">周计划系统</h1>
+          <button type="button" onClick={() => setIsOpen(false)} className="sidebar-close-button" aria-label="关闭导航菜单">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         <p className="text-sm text-secondary mt-1">
           {user?.username}
         </p>
@@ -90,6 +112,7 @@ export function Sidebar() {
           <span className="font-medium">退出登录</span>
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

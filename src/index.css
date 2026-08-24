@@ -58,6 +58,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  button, input, select, textarea { font: inherit; }
+
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+
+  :focus-visible {
+    outline: 3px solid rgb(13 148 136 / 0.32);
+    outline-offset: 2px;
+  }
+
   /* 流体字体 */
   h1 {
     font-size: clamp(2rem, 4vw, 3rem);
@@ -461,10 +470,70 @@
            hover:bg-[var(--accent-muted)] hover:shadow-[var(--shadow-lg)];
   }
 
+  .btn-secondary {
+    @apply border border-[var(--border)] bg-white px-[var(--spacing-lg)] py-[var(--spacing-sm)]
+           rounded-[var(--radius-full)] font-medium text-[var(--text-secondary)] transition-all duration-200
+           hover:border-[#99c4bd] hover:bg-[#f0fdfa] hover:text-[var(--accent-muted)] hover:shadow-[var(--shadow-sm)];
+  }
+
   .card {
     @apply rounded-[var(--radius-lg)] p-[var(--spacing-lg)] 
            border border-[var(--border)] transition-all duration-200;
     background-color: var(--surface-2);
+  }
+
+  .sidebar-menu-button, .sidebar-close-button, .sidebar-backdrop { display: none; }
+
+  @media (max-width: 767px) {
+    body { background-color: var(--surface-2); }
+
+    .sidebar {
+      width: min(18rem, calc(100vw - 3.5rem));
+      transform: translateX(-101%);
+      transition: transform 220ms ease;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .sidebar.sidebar-open { transform: translateX(0); }
+
+    .sidebar-menu-button {
+      position: fixed;
+      z-index: 40;
+      top: 1rem;
+      left: 1rem;
+      display: grid;
+      width: 2.75rem;
+      height: 2.75rem;
+      place-items: center;
+      border: 1px solid #bfd2d1;
+      border-radius: var(--radius-md);
+      background: rgb(255 255 255 / 0.94);
+      box-shadow: var(--shadow-md);
+      color: var(--accent-muted);
+    }
+
+    .sidebar-close-button {
+      display: grid;
+      width: 2.25rem;
+      height: 2.25rem;
+      place-items: center;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+    }
+
+    .sidebar-backdrop {
+      position: fixed;
+      z-index: 45;
+      inset: 0;
+      display: block;
+      border: 0;
+      background: rgb(15 23 42 / 0.38);
+      backdrop-filter: blur(2px);
+    }
+
+    .ml-64 { margin-left: 0 !important; }
+    .p-\[var\(--spacing-2xl\)\] { padding: 5.25rem 1rem 1.5rem !important; }
+    .max-w-6xl, .max-w-5xl, .max-w-4xl, .max-w-\[100rem\] { max-width: none; }
   }
 
   .page-transition-enter {
