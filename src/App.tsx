@@ -99,6 +99,7 @@ function AppRoutes() {
           />
           <Route path="/partner-resources" element={<ModuleRoute code="PARTNER_RESOURCE_MANAGEMENT"><PartnerResourcePage /></ModuleRoute>} />
           <Route
+            path="/personal"
             element={
               <ProtectedRoute>
                 <PersonalPage />
