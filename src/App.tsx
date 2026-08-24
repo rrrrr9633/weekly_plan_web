@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/store/authStore'
 import { getRoleHomePath } from '@/lib/auth'
@@ -12,6 +12,9 @@ import { ProjectManagementPage } from '@/pages/ProjectManagementPage'
 import { ArchivedPlansPage } from '@/pages/ArchivedPlansPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { CompanyManagementPage } from '@/pages/CompanyManagementPage'
+import { ModuleManagementPage } from '@/pages/ModuleManagementPage'
+import { DiagnosisCalendarPage } from '@/pages/DiagnosisCalendarPage'
+import { moduleApi } from '@/services/api'
 import { AiAssistant } from '@/components/AiAssistant'
 
 const queryClient = new QueryClient({
@@ -33,6 +36,16 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuthStore()
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== 'admin' && user.role !== 'super_admin') return <Navigate to={getRoleHomePath(user)} replace />
+  return <>{children}</>
+}
+
+function ModuleRoute({ code, children }: { code: string; children: React.ReactNode }) {
+  const { user } = useAuthStore()
+  const { data: modules, isLoading } = useQuery({ queryKey: ['myModules'], queryFn: moduleApi.getMine, enabled: Boolean(user && user.role !== 'super_admin') })
+  if (!user) return <Navigate to="/login" replace />
+  if (user.role === 'super_admin') return <Navigate to={getRoleHomePath(user)} replace />
+  if (isLoading) return <main className="ml-64 p-[var(--spacing-2xl)] text-secondary">正在校验模块权限…</main>
+  if (!modules?.some((module) => module.code === code && module.enabled)) return <Navigate to="/modules" replace />
   return <>{children}</>
 }
 
@@ -65,6 +78,22 @@ function AppRoutes() {
               <ProtectedRoute>
                 <ProfilePage />
               </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/modules"
+            element={
+              <ProtectedRoute>
+                <ModuleManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/diagnosis-calendar"
+            element={
+              <ModuleRoute code="TEAM_DIAGNOSIS_CALENDAR">
+                <DiagnosisCalendarPage />
+              </ModuleRoute>
             }
           />
           <Route

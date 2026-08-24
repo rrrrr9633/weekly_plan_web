@@ -179,6 +179,7 @@ export const companyApi = {
 // User API
 export const userApi = {
   getAll: () => api.get<User[]>('/users'),
+  getMembers: () => api.get<User[]>('/users/members'),
   getMe: () => api.get<User>('/users/me'),
   updateMyProfile: (displayName: string) => api.put<User>('/users/me', { displayName }),
   updateMyPassword: (currentPassword: string, newPassword: string) =>
@@ -191,6 +192,21 @@ export const userApi = {
   delete: (id: string) => api.delete<void>(`/users/${id}`),
   moveToCompany: (id: string, companyId: string) =>
     api.put<User>(`/users/${id}/company`, { companyId }),
+}
+
+// Project API
+export const moduleApi = {
+  getMine: () => api.get<import('@/types').FeatureModule[]>('/modules/me'),
+  setMineEnabled: (code: string, enabled: boolean) => api.put<void>(`/modules/me/${code}`, { enabled }),
+  getCompany: (companyId: string) => api.get<import('@/types').FeatureModule[]>(`/modules/companies/${companyId}`),
+  setCompanyEnabled: (companyId: string, code: string, enabled: boolean) => api.put<void>(`/modules/companies/${companyId}/${code}`, { enabled }),
+}
+
+export const diagnosisWorkApi = {
+  list: (start: string, end: string) => api.get<import('@/types').DiagnosisWork[]>('/diagnosis-works', { params: { start, end } }),
+  create: (data: { workDate: string; enterpriseName: string; address: string; participantIds: string[] }) => api.post<import('@/types').DiagnosisWork>('/diagnosis-works', { ...data, participantIds: data.participantIds.map(Number) }),
+  update: (id: string, data: { workDate: string; enterpriseName: string; address: string; participantIds: string[] }) => api.put<import('@/types').DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: data.participantIds.map(Number) }),
+  delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
 }
 
 // Project API

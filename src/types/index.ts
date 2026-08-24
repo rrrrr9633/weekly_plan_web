@@ -83,3 +83,21 @@ export interface WeekRange {
   start: string
   end: string
 }
+
+export interface FeatureModule {
+  code: string
+  name: string
+  description: string
+  enabled: boolean
+}
+
+export interface DiagnosisWork {
+  id: string
+  workDate: string
+  enterpriseName: string
+  address: string
+  createdByName: string
+  participants: Array<{ id: string; displayName: string }>
+  createdAt: string
+  updatedAt: string
+}

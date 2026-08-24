@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Calendar, Users, Settings, Archive, LogOut, UserRound, Building2 } from 'lucide-react'
+import { Home, Calendar, CalendarDays, Users, Settings, Archive, LogOut, UserRound, Building2, SlidersHorizontal } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
-import { companyApi } from '@/services/api'
+import { companyApi, moduleApi } from '@/services/api'
 import { cn } from '@/lib/utils'
 
 export function Sidebar() {
@@ -17,10 +17,18 @@ export function Sidebar() {
     queryFn: companyApi.getAll,
     enabled: isSuperAdmin,
   })
+  const { data: modules = [] } = useQuery({
+    queryKey: ['myModules'],
+    queryFn: moduleApi.getMine,
+    enabled: Boolean(user && !isSuperAdmin),
+  })
+  const hasDiagnosisCalendar = modules.some((module) => module.code === 'TEAM_DIAGNOSIS_CALENDAR' && module.enabled)
 
   const navigation = [
     { name: '公司管理', href: '/admin/companies', icon: Building2, superAdminOnly: true },
     { name: '个人信息', href: '/profile', icon: UserRound, adminOnly: false },
+    { name: '模块管理', href: '/modules', icon: SlidersHorizontal, adminOnly: false, regularOnly: true },
+    ...(hasDiagnosisCalendar ? [{ name: '团队诊断日历', href: '/diagnosis-calendar', icon: CalendarDays, adminOnly: false, regularOnly: true }] : []),
     { name: '个人计划', href: '/personal', icon: Calendar, adminOnly: false },
     { name: '团队大板', href: '/board', icon: Home, adminOnly: false },
     { name: '用户管理', href: '/admin/users', icon: Users, adminOnly: true },
