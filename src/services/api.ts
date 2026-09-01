@@ -68,6 +68,13 @@ async function request<T>(
   return payload as T
 }
 
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const token = useAuthStore.getState().token
+  const response = await fetch(buildUrl(path), { method: 'POST', signal: AbortSignal.timeout(TIMEOUT_MS), headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+  return payload as T
+}
 async function download(path: string, filename: string, params?: Query): Promise<void> {
   const token = useAuthStore.getState().token
   const user = useAuthStore.getState().user
@@ -100,7 +107,10 @@ export const api = {
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, { body }),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
   delete: <T>(path: string) => request<T>('DELETE', path),
+  upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 }
+
+export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; serviceProviderContact: string }
 
 export interface AuthResponse {
   token: string
@@ -207,6 +217,7 @@ export const diagnosisWorkApi = {
   create: (data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.post<DiagnosisWork>('/diagnosis-works', { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   update: (id: string, data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.put<DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
+  previewImport: (file: File) => { const form = new FormData(); form.append('file', file); return api.upload<ImportedDiagnosisRow[]>('/diagnosis-works/import/preview', form) },
 }
 
 export const partnerResourceApi = {
