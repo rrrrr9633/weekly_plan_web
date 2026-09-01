@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
-import type { Company, Project, User, WeekPlan } from '@/types'
+import type { Company, DiagnosisWork, Project, User, WeekPlan } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tianxiadiyi.xyz/api'
 const TIMEOUT_MS = 190_000
@@ -203,9 +203,9 @@ export const moduleApi = {
 }
 
 export const diagnosisWorkApi = {
-  list: (start: string, end: string) => api.get<import('@/types').DiagnosisWork[]>('/diagnosis-works', { params: { start, end } }),
-  create: (data: { workDate: string; enterpriseName: string; address: string; participantIds: string[] }) => api.post<import('@/types').DiagnosisWork>('/diagnosis-works', { ...data, participantIds: data.participantIds.map(Number) }),
-  update: (id: string, data: { workDate: string; enterpriseName: string; address: string; participantIds: string[] }) => api.put<import('@/types').DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: data.participantIds.map(Number) }),
+  list: (start: string, end: string) => api.get<DiagnosisWork[]>('/diagnosis-works', { params: { start, end } }),
+  create: (data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.post<DiagnosisWork>('/diagnosis-works', { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
+  update: (id: string, data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.put<DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
 }
 

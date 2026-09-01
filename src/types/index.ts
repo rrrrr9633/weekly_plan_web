@@ -115,6 +115,10 @@ export interface DiagnosisWork {
   workDate: string
   enterpriseName: string
   address: string
+  county: string
+  diagnosisTime: string
+  diagnosisRound: number
+  serviceProviderContact: string
   createdByName: string
   participants: Array<{ id: string; displayName: string }>
   createdAt: string
