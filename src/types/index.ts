@@ -118,7 +118,8 @@ export interface DiagnosisWork {
   county: string
   diagnosisTime: string
   diagnosisRound: number
-  serviceProviderContact: string
+  enterpriseContact: string
+  enterpriseContactPhone: string
   createdByName: string
   participants: Array<{ id: string; displayName: string }>
   createdAt: string

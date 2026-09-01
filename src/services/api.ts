@@ -110,7 +110,7 @@ export const api = {
   upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 }
 
-export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; serviceProviderContact: string }
+export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact: string; enterpriseContactPhone: string; participantNames: string[] }
 
 export interface AuthResponse {
   token: string
