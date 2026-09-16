@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, ChevronDown, History, Loader2, MessageSquarePlus, Send, ShieldAlert, Trash2, X } from 'lucide-react'
+import { Bot, ChevronDown, History, Loader2, MessageSquarePlus, Mic, Send, ShieldAlert, Square, Trash2, X } from 'lucide-react'
+import { isBrowserVoiceSupported, startVoiceInput } from '@/lib/voiceInput'
 import { aiApi, ApiError, type AiProposalResponse } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 
@@ -57,6 +58,10 @@ export function AiAssistant() {
   const [conversationId, setConversationId] = useState<string | number | null>(null)
   const [showMemories, setShowMemories] = useState(false)
   const [deleteConfirmed, setDeleteConfirmed] = useState(false)
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording'>('idle')
+  const [voiceDraft, setVoiceDraft] = useState('')
+  const voiceSession = useRef<ReturnType<typeof startVoiceInput> | null>(null)
+  const voiceBaseline = useRef('')
   const { data: conversationList = [] } = useQuery({
     queryKey: ['aiConversations'], queryFn: aiApi.getConversations, enabled: open && Boolean(user),
   })
@@ -85,8 +90,17 @@ export function AiAssistant() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
 
   useEffect(() => {
-    if (!open) setDeleteConfirmed(false)
+    if (open) return
+    setDeleteConfirmed(false)
+    voiceSession.current?.stop()
+    voiceSession.current = null
+    setVoiceDraft('')
+    setVoiceState('idle')
   }, [open])
+
+  useEffect(() => () => {
+    voiceSession.current?.stop()
+  }, [])
 
   const proposalMutation = useMutation({
     mutationFn: (nextMessage?: string) => aiApi.propose(nextMessage ?? message.trim(), conversationId),
@@ -122,6 +136,51 @@ export function AiAssistant() {
       setError(requestError instanceof ApiError ? requestError.message : '执行失败，请稍后重试。')
     },
   })
+
+  const stopVoice = () => {
+    voiceSession.current?.stop()
+    voiceSession.current = null
+    setVoiceDraft('')
+    setVoiceState('idle')
+  }
+
+  const toggleVoice = () => {
+    if (proposalMutation.isPending) return
+    if (voiceState === 'recording') {
+      stopVoice()
+      return
+    }
+    if (!isBrowserVoiceSupported()) {
+      setError('当前浏览器不支持语音输入，请使用 Chrome / Edge，或改用文字。')
+      return
+    }
+    setError(undefined)
+    voiceBaseline.current = message.trim()
+    setVoiceDraft('')
+    try {
+      voiceSession.current = startVoiceInput((text, isFinal) => {
+        const spoken = text.trim()
+        if (!spoken) return
+        const next = voiceBaseline.current ? `${voiceBaseline.current} ${spoken}` : spoken
+        if (isFinal) {
+          voiceBaseline.current = next
+          setVoiceDraft('')
+          setMessage(next)
+        } else {
+          setVoiceDraft(spoken)
+          setMessage(next)
+        }
+      }, (voiceError) => {
+        voiceSession.current = null
+        setVoiceDraft('')
+        setVoiceState('idle')
+        if (voiceError) setError(voiceError)
+      })
+      setVoiceState('recording')
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '无法开始语音输入。')
+    }
+  }
 
   if (!user) return null
 
@@ -229,7 +288,13 @@ export function AiAssistant() {
 
           <form onSubmit={submit} className="border-t p-4">
             <label className="sr-only" htmlFor="ai-message">向 AI 描述您的需求</label>
-            <div className="flex gap-2"><textarea id="ai-message" value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} rows={2} placeholder="例如：为本周新增一项计划…" className="min-w-0 flex-1 resize-none rounded-[var(--radius-md)] border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" /><button type="submit" disabled={!message.trim() || proposalMutation.isPending} className="grid h-10 w-10 place-items-center self-end rounded-full bg-[var(--accent)] text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="发送"><Send className="h-4 w-4" /></button></div>
+            <div className="flex gap-2">
+              <textarea id="ai-message" value={message} onChange={(event) => { setMessage(event.target.value); if (voiceState === 'recording') voiceBaseline.current = event.target.value.trim() }} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} rows={2} placeholder={voiceState === 'recording' ? (voiceDraft ? `正在听：${voiceDraft}` : '正在听，再次点击麦克风结束…') : '例如：为本周新增一项计划…'} className="min-w-0 flex-1 resize-none rounded-[var(--radius-md)] border bg-white px-3 py-2 text-sm outline-none focus:border-[var(--accent)]" />
+              <button type="button" onClick={toggleVoice} disabled={proposalMutation.isPending} className={`grid h-10 w-10 place-items-center self-end rounded-full text-white disabled:cursor-not-allowed disabled:opacity-50 ${voiceState === 'recording' ? 'bg-[var(--status-error)]' : 'bg-slate-700'}`} aria-label={voiceState === 'recording' ? '停止语音输入' : '语音输入'}>
+                {voiceState === 'recording' ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
+              </button>
+              <button type="submit" disabled={!message.trim() || proposalMutation.isPending || voiceState !== 'idle'} className="grid h-10 w-10 place-items-center self-end rounded-full bg-[var(--accent)] text-white disabled:cursor-not-allowed disabled:opacity-50" aria-label="发送"><Send className="h-4 w-4" /></button>
+            </div>
           </form>
         </section>
       </div>}
