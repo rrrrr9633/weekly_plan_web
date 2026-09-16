@@ -113,8 +113,9 @@ export const api = {
 export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact: string; enterpriseContactPhone: string; participantNames: string[] }
 
 export interface AuthResponse {
-  token: string
+  token?: string
   user: User
+  status: 'ACTIVE' | 'PENDING'
 }
 
 export interface AiProposalResponse {
@@ -173,12 +174,28 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post<AuthResponse>('/auth/login', { username, password }),
 
-  register: (username: string, password: string, companyId: string) =>
-    api.post<AuthResponse>('/auth/register', { username, password, companyId }),
+  register: (username: string, password: string, companyId?: string, newCompanyName?: string, newCompanyCode?: string) =>
+    api.post<AuthResponse>('/auth/register', { username, password, companyId: companyId ? Number(companyId) : undefined, newCompanyName, newCompanyCode }),
 
   logout: () => api.post<void>('/auth/logout'),
 }
 
+export interface RegistrationRequest {
+  id: number
+  username: string
+  displayName: string
+  companyId?: string
+  companyName?: string
+  newCompanyName?: string
+  newCompanyCode?: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  createdAt: string
+}
+
+export const registrationRequestApi = {
+  getPending: () => api.get<RegistrationRequest[]>('/registration-requests/pending'),
+  review: (id: number, action: 'approve' | 'reject') => api.put<RegistrationRequest>(`/registration-requests/${id}`, { action }),
+}
 export const companyApi = {
   getRegistrationCompanies: () => api.get<Company[]>('/companies/public'),
   getAll: () => api.get<Company[]>('/companies'),

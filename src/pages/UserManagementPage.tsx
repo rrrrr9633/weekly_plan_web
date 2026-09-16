@@ -4,7 +4,7 @@ import { Plus, Loader2, Edit2, Trash2, CalendarPlus } from 'lucide-react'
 import { PageTransition } from '@/components/layout/PageTransition'
 import { WeekSelector } from '@/components/WeekSelector'
 import { PlanModal } from '@/components/PlanModal'
-import { companyApi, projectApi, userApi, weekPlanApi } from '@/services/api'
+import { companyApi, projectApi, registrationRequestApi, userApi, weekPlanApi } from '@/services/api'
 import { useWeekStore } from '@/store/weekStore'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
@@ -34,11 +34,10 @@ export function UserManagementPage() {
     queryFn: companyApi.getAll,
     enabled: isSuperAdmin,
   })
-  const { data: projects = [] } = useQuery({
-    queryKey: ['projects'],
-    queryFn: projectApi.getAll,
-    enabled: hasCompanyContext,
-  })
+  const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: projectApi.getAll, enabled: hasCompanyContext })
+  const { data: pendingRequests = [] } = useQuery({ queryKey: ['registrationRequests'], queryFn: registrationRequestApi.getPending, enabled: !!currentUser })
+  const reviewMutation = useMutation({ mutationFn: ({ id, action }: { id: number; action: 'approve' | 'reject' }) => registrationRequestApi.review(id, action), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['registrationRequests'] }); queryClient.invalidateQueries({ queryKey: ['users'] }) } })
+
   const userGroups = useMemo(() => {
     if (!isSuperAdmin) return [{ id: 'current-company', name: '', users }]
 
@@ -129,6 +128,20 @@ export function UserManagementPage() {
             <div className="mb-[var(--spacing-lg)] rounded-[var(--radius-md)] border border-[var(--status-error)]/40 bg-[var(--status-error)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] text-sm text-[var(--status-error)]">
               {moveError}
             </div>
+          )}
+
+          {pendingRequests.length > 0 && (
+            <section className="card mb-[var(--spacing-xl)] p-[var(--spacing-lg)]">
+              <h2 className="mb-3 text-lg font-semibold">待审核注册申请（{pendingRequests.length}）</h2>
+              <div className="space-y-3">
+                {pendingRequests.map((request) => (
+                  <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-[var(--border)] p-3">
+                    <div><strong>{request.displayName || request.username}</strong><span className="ml-2 text-sm text-secondary">{request.username}</span><p className="text-sm text-secondary">{request.newCompanyName ? `新公司：${request.newCompanyName}（${request.newCompanyCode}）` : `申请加入：${request.companyName}`}</p></div>
+                    <div className="flex gap-2"><button className="btn-primary" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({ id: request.id, action: 'approve' })}>通过</button><button className="rounded border px-3 py-1 text-sm" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({ id: request.id, action: 'reject' })}>拒绝</button></div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {!hasCompanyContext ? (

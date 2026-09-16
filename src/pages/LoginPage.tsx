@@ -17,6 +17,10 @@ export function LoginPage() {
   const [companies, setCompanies] = useState<Company[]>([])
   const [companyId, setCompanyId] = useState('')
   const [loadingCompanies, setLoadingCompanies] = useState(false)
+  const [newCompany, setNewCompany] = useState(false)
+  const [newCompanyName, setNewCompanyName] = useState('')
+  const [newCompanyCode, setNewCompanyCode] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const sessionError = searchParams.get('reason') === 'session-invalid'
@@ -43,8 +47,12 @@ export function LoginPage() {
       setError('注册密码至少需要 8 位')
       return
     }
-    if (!isLogin && !companyId) {
+    if (!isLogin && !newCompany && !companyId) {
       setError('请选择所属公司')
+      return
+    }
+    if (!isLogin && newCompany && (!newCompanyName.trim() || !newCompanyCode.trim())) {
+      setError('请填写新公司名称和公司编码')
       return
     }
 
@@ -53,8 +61,14 @@ export function LoginPage() {
     try {
       const response = isLogin
         ? await authApi.login(username, password)
-        : await authApi.register(username, password, companyId)
+        : await authApi.register(username, password, newCompany ? undefined : companyId, newCompany ? newCompanyName : undefined, newCompany ? newCompanyCode : undefined)
 
+      if (!isLogin && response.status === 'PENDING') {
+        setNotice(newCompany ? '新公司注册申请已提交，请等待超级管理员审核。' : '注册申请已提交，请等待公司管理员或超级管理员审核。')
+        setPassword('')
+        return
+      }
+      if (!response.token) throw new Error('审核通过后才可以登录')
       setAuth(response.user, response.token)
       navigate(getRoleHomePath(response.user), { replace: true })
     } catch (err: unknown) {
@@ -116,6 +130,15 @@ export function LoginPage() {
 
             {!isLogin && (
               <div>
+                <label className="block text-sm font-medium mb-2">注册方式</label>
+                <div className="flex gap-4 text-sm">
+                  <label className="flex items-center gap-2"><input type="radio" checked={!newCompany} onChange={() => setNewCompany(false)} />加入已有公司</label>
+                  <label className="flex items-center gap-2"><input type="radio" checked={newCompany} onChange={() => setNewCompany(true)} />新公司团队注册</label>
+                </div>
+              </div>
+            )}
+            {!isLogin && !newCompany && (
+              <div>
                 <label className="block text-sm font-medium mb-2">所属公司</label>
                 <select
                   value={companyId}
@@ -128,6 +151,13 @@ export function LoginPage() {
                   {!loadingCompanies && companies.length === 0 && <option value="">暂无可注册公司</option>}
                   {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
                 </select>
+              </div>
+            )}
+            {!isLogin && newCompany && (
+              <div className="space-y-3 rounded-[var(--radius-md)] border border-[var(--border)] p-3">
+                <label className="block text-sm font-medium">新公司名称<input value={newCompanyName} onChange={(event) => setNewCompanyName(event.target.value)} className="mt-1 w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)]" placeholder="例如：XX科技有限公司" required /></label>
+                <label className="block text-sm font-medium">公司编码<input value={newCompanyCode} onChange={(event) => setNewCompanyCode(event.target.value)} className="mt-1 w-full px-[var(--spacing-md)] py-[var(--spacing-sm)] surface-3 rounded-[var(--radius-md)] border border-[var(--border)]" placeholder="例如：XX_TECH" required /></label>
+                <p className="text-xs text-secondary">提交后由超级管理员审核，审核通过后你将成为该公司的管理员。</p>
               </div>
             )}
 
@@ -150,6 +180,7 @@ export function LoginPage() {
                 {error || sessionError}
               </div>
             )}
+            {notice && <div className="text-sm text-[var(--accent)] bg-[var(--accent)]/10 px-[var(--spacing-md)] py-[var(--spacing-sm)] rounded-[var(--radius-md)]">{notice}</div>}
 
             <button
               type="submit"
