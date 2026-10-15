@@ -246,7 +246,7 @@ export const moduleApi = {
 }
 
 export const diagnosisWorkApi = {
-  list: (start: string, end: string) => api.get<DiagnosisWork[]>('/diagnosis-works', { params: { start, end } }),
+  list: (start: string, end: string, filters?: { enterprise?: string; participant?: string }) => api.get<DiagnosisWork[]>('/diagnosis-works', { params: { start, end, ...(filters?.enterprise ? { enterprise: filters.enterprise } : {}), ...(filters?.participant ? { participant: filters.participant } : {}) } }),
   create: (data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.post<DiagnosisWork>('/diagnosis-works', { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   update: (id: string, data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.put<DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
