@@ -126,7 +126,10 @@ export const api = {
   upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 }
 
-export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact: string; enterpriseContactPhone: string; participantNames: string[] }
+export interface ExistingDiagnosis { id: string; workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact: string; enterpriseContactPhone: string; participantNames: string[] }
+export interface ImportedDiagnosisRow { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact: string; enterpriseContactPhone: string; participantNames: string[]; nameMatch?: string; similarity?: number; matchedEnterpriseName?: string; sameRoundExists?: boolean; existing?: ExistingDiagnosis | null }
+export interface DiagnosisImportItem { enterpriseName: string; diagnosisRound: number; action: string; detail: string }
+export interface ImportDiagnosisChoice { workDate: string; enterpriseName: string; county: string; diagnosisTime: string; diagnosisRound: number; enterpriseContact?: string; enterpriseContactPhone?: string; participantNames?: string[]; participantIds?: number[]; keep?: string }
 
 export interface AuthResponse {
   token?: string
@@ -251,6 +254,7 @@ export const diagnosisWorkApi = {
   update: (id: string, data: Omit<DiagnosisWork, 'id' | 'address' | 'createdByName' | 'participants' | 'createdAt' | 'updatedAt'> & { participantIds?: string[] }) => api.put<DiagnosisWork>(`/diagnosis-works/${id}`, { ...data, participantIds: (data.participantIds ?? []).map(Number) }),
   delete: (id: string) => api.delete<void>(`/diagnosis-works/${id}`),
   previewImport: (file: File) => { const form = new FormData(); form.append('file', file); return api.upload<ImportedDiagnosisRow[]>('/diagnosis-works/import/preview', form) },
+  importRows: (rows: ImportDiagnosisChoice[]) => api.post<DiagnosisImportItem[]>('/diagnosis-works/import', { rows }),
 }
 
 export const partnerResourceApi = {
