@@ -42,18 +42,22 @@ export function PhotoWatermarkPage() {
     queryFn: watermarkEnterpriseApi.list,
   })
 
-  const regions = useMemo(() => uniqueRegions(enterprises), [enterprises])
-  const regionOptions = useMemo(
-    () => regions.filter((item) => matchesQuery(`${item.label}${item.city}${item.county}`, regionQuery)).slice(0, 12),
-    [regions, regionQuery]
-  )
   const nameOptions = useMemo(() => {
-    if (!region) return []
-    return enterprises
-      .filter((item) => item.city === region.city && item.county === region.county)
-      .filter((item) => matchesQuery(item.name, nameQuery || enterpriseName))
-      .slice(0, 12)
-  }, [enterprises, region, nameQuery, enterpriseName])
+    const query = nameQuery || enterpriseName
+    if (!query.trim()) return []
+    return enterprises.filter((item) => matchesQuery(item.name, query)).slice(0, 12)
+  }, [enterprises, nameQuery, enterpriseName])
+  const regionsFromName = useMemo(
+    () => uniqueRegions(enterprises.filter((item) => matchesQuery(item.name, enterpriseName))),
+    [enterprises, enterpriseName],
+  )
+  const regions = useMemo(() => {
+    const fromName = enterpriseName.trim() ? regionsFromName : uniqueRegions(enterprises)
+    if (!regionQuery.trim() || region) return fromName
+    return fromName.filter((item) => matchesQuery(`${item.label}${item.city}${item.county}`, regionQuery))
+  }, [enterprises, enterpriseName, regionQuery, region, regionsFromName])
+  const regionOptions = regions.slice(0, 12)
+  const showRegionMenu = !region && (Boolean(regionQuery.trim()) || (Boolean(enterpriseName.trim()) && regionOptions.length > 0))
 
   const mark = {
     time: hourMinute(time),
@@ -117,8 +121,30 @@ export function PhotoWatermarkPage() {
   const pickRegion = (item: Region) => {
     setRegion(item)
     setRegionQuery(item.label)
-    setEnterpriseName('')
+  }
+
+  const pickEnterprise = (item: WatermarkEnterprise) => {
+    const next = toRegion(item)
+    setEnterpriseName(item.name)
     setNameQuery('')
+    setRegion(next)
+    setRegionQuery(next.label)
+  }
+
+  const onEnterpriseName = (value: string) => {
+    setEnterpriseName(value)
+    setNameQuery(value)
+    const exact = enterprises.filter((item) => item.name === value.trim())
+    const fuzzy = enterprises.filter((item) => matchesQuery(item.name, value))
+    const hits = exact.length ? exact : fuzzy
+    const places = uniqueRegions(hits)
+    if (value.trim() && places.length === 1) {
+      setRegion(places[0])
+      setRegionQuery(places[0].label)
+    } else if (region && !places.some((item) => item.key === region.key)) {
+      setRegion(null)
+      setRegionQuery('')
+    }
   }
 
   const download = async () => {
@@ -159,7 +185,7 @@ export function PhotoWatermarkPage() {
             <Stamp className="text-accent" />
             <h2>照片加水印</h2>
           </div>
-          <p className="mt-2 text-secondary">按打卡样式叠加时间与地点。时间可用 261023954 这种快捷码，地点先选区域再选企业。</p>
+          <p className="mt-2 text-secondary">按打卡样式叠加时间与地点。时间可用 261023954 这种快捷码；输入企业名称后会自动带出市区。</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,text/csv" className="hidden" onChange={(event) => void importFile(event.target.files?.[0])} />
@@ -207,7 +233,33 @@ export function PhotoWatermarkPage() {
           </div>
           <button type="button" className="text-sm text-accent" onClick={() => applyTime(nowCheckin())}>填入当前时间</button>
 
-          <Field label="区域" hint="搜铁西，会列出沈阳铁西、鞍山铁西等">
+          <Field label="企业名称" hint="输入名称后自动带出市区">
+            <div className="relative">
+              <input
+                value={enterpriseName}
+                onChange={(event) => onEnterpriseName(event.target.value)}
+                placeholder="输入或筛选企业名称"
+                className="w-full rounded-[var(--radius-md)] border p-2"
+              />
+              {nameQuery && (
+                <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-[var(--radius-md)] border bg-white shadow-[var(--shadow-md)]">
+                  {nameOptions.length ? nameOptions.map((item) => (
+                    <li key={item.id}>
+                      <button type="button" className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]" onClick={() => pickEnterprise(item)}>
+                        <span className="truncate">{item.name}</span>
+                        <span className="shrink-0 text-xs text-secondary">{regionLabel(item.city, item.county)}</span>
+                      </button>
+                    </li>
+                  )) : <li className="px-3 py-2 text-sm text-secondary">名录里没有匹配企业，仍可手填</li>}
+                </ul>
+              )}
+            </div>
+          </Field>
+
+          <Field
+            label="区域"
+            hint={regionsFromName.length > 1 ? '该名称对应多个市区，点选一个' : '唯一匹配会自动带出；也可搜铁西手动改'}
+          >
             <div className="relative">
               <input
                 value={regionQuery}
@@ -215,10 +267,10 @@ export function PhotoWatermarkPage() {
                   setRegionQuery(event.target.value)
                   setRegion(null)
                 }}
-                placeholder="搜索区县，如铁西"
+                placeholder="自动带出，或搜索区县"
                 className="w-full rounded-[var(--radius-md)] border p-2"
               />
-              {regionQuery && !region && (
+              {showRegionMenu && (
                 <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-[var(--radius-md)] border bg-white shadow-[var(--shadow-md)]">
                   {regionOptions.length ? regionOptions.map((item) => (
                     <li key={item.key}>
@@ -240,39 +292,6 @@ export function PhotoWatermarkPage() {
                 </button>
               </p>
             )}
-          </Field>
-
-          <Field label="企业名称">
-            <div className="relative">
-              <input
-                value={enterpriseName}
-                onChange={(event) => {
-                  setEnterpriseName(event.target.value)
-                  setNameQuery(event.target.value)
-                }}
-                disabled={!region}
-                placeholder={region ? '输入或筛选企业名称' : '请先选择区域'}
-                className="w-full rounded-[var(--radius-md)] border p-2 disabled:bg-[var(--surface-2)]"
-              />
-              {region && nameQuery && nameOptions.length > 0 && (
-                <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-[var(--radius-md)] border bg-white shadow-[var(--shadow-md)]">
-                  {nameOptions.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        className="w-full truncate px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]"
-                        onClick={() => {
-                          setEnterpriseName(item.name)
-                          setNameQuery('')
-                        }}
-                      >
-                        {item.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
           </Field>
 
           <Field label="地点补充（可选）" hint="例如东站街道，会插在区县和企业名之间">
@@ -319,11 +338,15 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   )
 }
 
+function toRegion(item: WatermarkEnterprise): Region {
+  return { key: regionKey(item.city, item.county), city: item.city, county: item.county, label: regionLabel(item.city, item.county) }
+}
+
 function uniqueRegions(enterprises: WatermarkEnterprise[]): Region[] {
   const map = new Map<string, Region>()
   for (const item of enterprises) {
-    const key = regionKey(item.city, item.county)
-    if (!map.has(key)) map.set(key, { key, city: item.city, county: item.county, label: regionLabel(item.city, item.county) })
+    const next = toRegion(item)
+    if (!map.has(next.key)) map.set(next.key, next)
   }
   return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
 }
