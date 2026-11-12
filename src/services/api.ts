@@ -257,6 +257,15 @@ export const diagnosisWorkApi = {
   importRows: (rows: ImportDiagnosisChoice[]) => api.post<DiagnosisImportItem[]>('/diagnosis-works/import', { rows }),
 }
 
+export const watermarkEnterpriseApi = {
+  list: () => api.get<import('@/types').WatermarkEnterprise[]>('/watermark-enterprises'),
+  importWorkbook: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.upload<import('@/types').WatermarkEnterpriseImportResult>('/watermark-enterprises/import', form)
+  },
+}
+
 export const partnerResourceApi = {
   getAll: () => api.get<import('@/types').PartnerResource[]>('/partner-resources'),
   create: (data: Omit<import('@/types').PartnerResource, 'id' | 'ownerName' | 'createdAt'>) => api.post<import('@/types').PartnerResource>('/partner-resources', data),

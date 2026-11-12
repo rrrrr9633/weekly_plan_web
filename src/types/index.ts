@@ -110,6 +110,19 @@ export interface PartnerResource {
   createdAt: string
 }
 
+export interface WatermarkEnterprise {
+  id: string
+  name: string
+  city: string
+  county: string
+}
+
+export interface WatermarkEnterpriseImportResult {
+  inserted: number
+  existed: number
+  skipped: number
+}
+
 export interface DiagnosisWork {
   id: string
   workDate: string

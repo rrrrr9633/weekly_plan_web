@@ -15,6 +15,7 @@ import { CompanyManagementPage } from '@/pages/CompanyManagementPage'
 import { ModuleManagementPage } from '@/pages/ModuleManagementPage'
 import { DiagnosisCalendarPage } from '@/pages/DiagnosisCalendarPage'
 import { PartnerResourcePage } from '@/pages/PartnerResourcePage'
+import { PhotoWatermarkPage } from '@/pages/PhotoWatermarkPage'
 import { moduleApi } from '@/services/api'
 import { AiAssistant } from '@/components/AiAssistant'
 
@@ -98,6 +99,7 @@ function AppRoutes() {
             }
           />
           <Route path="/partner-resources" element={<ModuleRoute code="PARTNER_RESOURCE_MANAGEMENT"><PartnerResourcePage /></ModuleRoute>} />
+          <Route path="/photo-watermark" element={<ModuleRoute code="PHOTO_WATERMARK"><PhotoWatermarkPage /></ModuleRoute>} />
           <Route
             path="/personal"
             element={
