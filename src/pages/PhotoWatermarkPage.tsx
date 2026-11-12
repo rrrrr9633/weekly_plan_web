@@ -162,7 +162,7 @@ export function PhotoWatermarkPage() {
           <p className="mt-2 text-secondary">按打卡样式叠加时间与地点。时间可用 261023954 这种快捷码，地点先选区域再选企业。</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <input ref={fileRef} type="file" accept=".xlsx" className="hidden" onChange={(event) => void importFile(event.target.files?.[0])} />
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,text/csv" className="hidden" onChange={(event) => void importFile(event.target.files?.[0])} />
           <button className="btn-secondary flex items-center gap-2" onClick={() => fileRef.current?.click()} disabled={importing}>
             <Upload className="h-4 w-4" />
             {importing ? '正在导入…' : '上传企业表'}
@@ -174,7 +174,7 @@ export function PhotoWatermarkPage() {
       {isLoading && <p className="mb-4 text-sm text-secondary">正在加载企业名录…</p>}
       {!isLoading && enterprises.length === 0 && (
         <p className="mb-4 rounded-[var(--radius-md)] border bg-[var(--surface-2)] px-4 py-3 text-sm text-secondary">
-          还没有企业名录。请上传含「企业名称、市、区县」列的 xlsx，系统只保存名称和区县，城市用于区分沈阳铁西、鞍山铁西。
+          还没有企业名录。请上传企业清单（xlsx / xls / csv）。有表头时认「企业名称、市、区县」；没有表头也可以，按截图那种列：企业名、代码、行业、市、区县。只保存名称和区县，市用来区分沈阳铁西、鞍山铁西。
         </p>
       )}
 
