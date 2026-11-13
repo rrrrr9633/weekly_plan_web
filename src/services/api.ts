@@ -20,6 +20,13 @@ export class ApiError extends Error {
   }
 }
 
+function throwIfFailed(status: number, payload: unknown): never {
+  const fromApi = (payload as { message?: string } | null)?.message
+  const message = fromApi
+    || (status === 413 ? '文件太大，网关拦住了。请把 Word 和封面图压到合计 100MB 以内后再试' : `请求失败 (${status})`)
+  throw new ApiError(status, payload, message)
+}
+
 function buildUrl(path: string, params?: Query): string {
   const url = new URL(`${API_BASE_URL}${path}`)
   for (const [key, value] of Object.entries(params ?? {})) {
@@ -60,9 +67,7 @@ async function request<T>(
       useAuthStore.getState().logout()
       window.location.assign('/login?reason=session-invalid')
     }
-    const message =
-      (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`
-    throw new ApiError(response.status, payload, message)
+    throwIfFailed(response.status, payload)
   }
 
   return payload as T
@@ -87,7 +92,7 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
       useAuthStore.getState().logout()
       window.location.assign('/login?reason=session-invalid')
     }
-    throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+    throwIfFailed(response.status, payload)
   }
   return payload as T
 }
@@ -110,7 +115,7 @@ async function uploadDownload(path: string, form: FormData, filename: string): P
       useAuthStore.getState().logout()
       window.location.assign('/login?reason=session-invalid')
     }
-    throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+    throwIfFailed(response.status, payload)
   }
   const headerName = response.headers.get('content-disposition')
   const named = headerName?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
@@ -137,7 +142,7 @@ async function download(path: string, filename: string, params?: Query): Promise
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
-    throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+    throwIfFailed(response.status, payload)
   }
 
   const objectUrl = URL.createObjectURL(await response.blob())
@@ -300,12 +305,14 @@ export const watermarkEnterpriseApi = {
 }
 
 export const reportPdfApi = {
-  convert: (word: File, cover: File) => {
+  convert: (word: File, cover: File, format: 'pdf' | 'word' = 'pdf') => {
     const form = new FormData()
     form.append('word', word)
     form.append('cover', cover)
+    form.append('format', format)
     const base = word.name.replace(/\.[^.]+$/, '')
-    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.pdf`)
+    const ext = format === 'word' ? 'docx' : 'pdf'
+    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.${ext}`)
   },
 }
 
