@@ -68,12 +68,22 @@ export function paintCheckinWatermark(
 }
 
 function drawBadge(ctx: CanvasRenderingContext2D, x: number, baseline: number, unit: number) {
-  const height = unit * 0.95
-  const width = unit * 2.55
-  const y = baseline - height * 0.78
-  const radius = height / 2
+  const height = unit * 1.02
+  const fontSize = height * 0.5
+  const label = '打卡'
   ctx.save()
   ctx.shadowColor = 'transparent'
+  ctx.font = `700 ${fontSize}px "PingFang SC", "Noto Sans SC", sans-serif`
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  const textW = ctx.measureText(label).width
+  const padX = height * 0.26
+  const checkR = height * 0.26
+  const gap = height * 0.18
+  const width = padX + checkR * 2 + gap + textW + padX
+  const y = baseline - height * 0.8
+  const radius = height / 2
+
   roundRect(ctx, x, y, width, height, radius)
   ctx.fillStyle = '#21C45A'
   ctx.fill()
@@ -81,11 +91,10 @@ function drawBadge(ctx: CanvasRenderingContext2D, x: number, baseline: number, u
   ctx.lineWidth = Math.max(1, unit * 0.04)
   ctx.stroke()
 
-  const cx = x + height * 0.48
+  const cx = x + padX + checkR
   const cy = y + height * 0.5
-  const cr = height * 0.28
   ctx.beginPath()
-  ctx.arc(cx, cy, cr, 0, Math.PI * 2)
+  ctx.arc(cx, cy, checkR, 0, Math.PI * 2)
   ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.beginPath()
@@ -93,15 +102,13 @@ function drawBadge(ctx: CanvasRenderingContext2D, x: number, baseline: number, u
   ctx.lineWidth = Math.max(1.6, unit * 0.08)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.moveTo(cx - cr * 0.45, cy + cr * 0.05)
-  ctx.lineTo(cx - cr * 0.08, cy + cr * 0.38)
-  ctx.lineTo(cx + cr * 0.48, cy - cr * 0.32)
+  ctx.moveTo(cx - checkR * 0.42, cy + checkR * 0.04)
+  ctx.lineTo(cx - checkR * 0.06, cy + checkR * 0.36)
+  ctx.lineTo(cx + checkR * 0.46, cy - checkR * 0.3)
   ctx.stroke()
 
   ctx.fillStyle = '#ffffff'
-  ctx.font = `700 ${unit * 0.42}px "PingFang SC", "Noto Sans SC", sans-serif`
-  ctx.textBaseline = 'middle'
-  ctx.fillText('打卡', x + height * 0.9, y + height * 0.52)
+  ctx.fillText(label, cx + checkR + gap, cy + height * 0.02)
   ctx.restore()
   return { right: x + width }
 }
