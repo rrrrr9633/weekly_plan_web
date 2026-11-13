@@ -91,6 +91,39 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
   }
   return payload as T
 }
+async function uploadDownload(path: string, form: FormData, filename: string): Promise<void> {
+  const token = useAuthStore.getState().token
+  const user = useAuthStore.getState().user
+  const companyId = useTenantContextStore.getState().companyId
+  const response = await fetch(buildUrl(path), {
+    method: 'POST',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(user?.role === 'super_admin' && companyId ? { 'X-Company-Id': companyId } : {}),
+    },
+    body: form,
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    if (response.status === 401 && token && !path.startsWith('/auth/')) {
+      useAuthStore.getState().logout()
+      window.location.assign('/login?reason=session-invalid')
+    }
+    throw new ApiError(response.status, payload, (payload as { message?: string } | null)?.message ?? `请求失败 (${response.status})`)
+  }
+  const headerName = response.headers.get('content-disposition')
+  const named = headerName?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = named ? decodeURIComponent(named) : filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
 async function download(path: string, filename: string, params?: Query): Promise<void> {
   const token = useAuthStore.getState().token
   const user = useAuthStore.getState().user
@@ -263,6 +296,16 @@ export const watermarkEnterpriseApi = {
     const form = new FormData()
     form.append('file', file)
     return api.upload<import('@/types').WatermarkEnterpriseImportResult>('/watermark-enterprises/import', form)
+  },
+}
+
+export const reportPdfApi = {
+  convert: (word: File, cover: File) => {
+    const form = new FormData()
+    form.append('word', word)
+    form.append('cover', cover)
+    const base = word.name.replace(/\.[^.]+$/, '')
+    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.pdf`)
   },
 }
 

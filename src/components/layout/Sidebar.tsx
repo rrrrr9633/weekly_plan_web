@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { Building2, Calendar, CalendarDays, Home, Users, Settings, Archive, LogOut, UserRound, SlidersHorizontal, Menu, X, Handshake, Stamp } from 'lucide-react'
+import { Building2, Calendar, CalendarDays, FileDown, Home, Users, Settings, Archive, LogOut, UserRound, SlidersHorizontal, Menu, X, Handshake, Stamp } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useTenantContextStore } from '@/store/tenantContextStore'
 import { companyApi, moduleApi } from '@/services/api'
@@ -27,6 +27,7 @@ export function Sidebar() {
   const hasDiagnosisCalendar = modules.some((module) => module.code === 'TEAM_DIAGNOSIS_CALENDAR' && module.enabled)
   const hasPartnerResources = modules.some((module) => module.code === 'PARTNER_RESOURCE_MANAGEMENT' && module.enabled)
   const hasPhotoWatermark = modules.some((module) => module.code === 'PHOTO_WATERMARK' && module.enabled)
+  const hasReportPdf = modules.some((module) => module.code === 'REPORT_COVER_PDF' && module.enabled)
 
   useEffect(() => {
     setIsOpen(false)
@@ -39,6 +40,7 @@ export function Sidebar() {
     ...(hasDiagnosisCalendar ? [{ name: '团队诊断日历', href: '/diagnosis-calendar', icon: CalendarDays, adminOnly: false, regularOnly: true }] : []),
     ...(hasPartnerResources ? [{ name: '资源管理系统', href: '/partner-resources', icon: Handshake, adminOnly: false, regularOnly: true }] : []),
     ...(hasPhotoWatermark ? [{ name: '照片加水印', href: '/photo-watermark', icon: Stamp, adminOnly: false, regularOnly: true }] : []),
+    ...(hasReportPdf ? [{ name: '报告转PDF', href: '/report-pdf', icon: FileDown, adminOnly: false, regularOnly: true }] : []),
     { name: '个人计划', href: '/personal', icon: Calendar, adminOnly: false },
     { name: '团队大板', href: '/board', icon: Home, adminOnly: false },
     { name: '用户管理', href: '/admin/users', icon: Users, adminOnly: true },

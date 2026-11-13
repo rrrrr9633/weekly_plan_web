@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, Download, ImagePlus, MapPin, Stamp, Upload, X } from 'lucide-react'
+import { Camera, Download, ImagePlus, MapPin, Stamp, Upload, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { watermarkEnterpriseApi } from '@/services/api'
 import type { WatermarkEnterprise } from '@/types'
 import {
@@ -40,6 +40,8 @@ export function PhotoWatermarkPage() {
   const [busy, setBusy] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+  const [dragOver, setDragOver] = useState<number | 'all' | null>(null)
+  const [viewer, setViewer] = useState<{ index: number; zoom: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const photoRefs = useRef<Array<HTMLInputElement | null>>([null, null, null])
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -126,6 +128,21 @@ export function PhotoWatermarkPage() {
     return () => { revoked = true }
   }, [photos, times, location])
 
+  useEffect(() => {
+    if (!viewer) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setViewer(null)
+      if (event.key === '+' || event.key === '=') {
+        setViewer((current) => current ? { ...current, zoom: clampZoom(current.zoom, 0.25) } : current)
+      }
+      if (event.key === '-' || event.key === '_') {
+        setViewer((current) => current ? { ...current, zoom: clampZoom(current.zoom, -0.25) } : current)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [viewer])
+
   const pickRegion = (item: Region) => {
     setRegion(item)
     setRegionQuery(item.label)
@@ -178,6 +195,50 @@ export function PhotoWatermarkPage() {
 
   const setPhotoAt = (index: number, file: File | null) => {
     setPhotos((current) => current.map((item, itemIndex) => itemIndex === index ? file : item))
+  }
+
+  const takeImages = (files: FileList | File[]) => [...files].filter((file) =>
+    file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|heic)$/i.test(file.name)
+  )
+
+  const fillPhotos = (files: File[], start = 0) => {
+    if (!files.length) return
+    setPhotos((current) => {
+      const next = [...current]
+      files.slice(0, 3 - start).forEach((file, offset) => {
+        next[start + offset] = file
+      })
+      return next
+    })
+  }
+
+  const onDragOverZone = (event: DragEvent, zone: number | 'all') => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDragOver(zone)
+  }
+
+  const onDropSlot = (index: number, event: DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragOver(null)
+    const images = takeImages(event.dataTransfer.files)
+    if (!images.length) return
+    if (images.length === 1) setPhotoAt(index, images[0])
+    else fillPhotos(images, index)
+  }
+
+  const onDropAll = (event: DragEvent) => {
+    event.preventDefault()
+    setDragOver(null)
+    const images = takeImages(event.dataTransfer.files)
+    if (!images.length) return
+    const firstEmpty = photos.findIndex((item) => !item)
+    fillPhotos(images, firstEmpty === -1 ? 0 : firstEmpty)
+  }
+
+  const bumpZoom = (delta: number) => {
+    setViewer((current) => current ? { ...current, zoom: clampZoom(current.zoom, delta) } : current)
   }
 
   const importFile = async (file?: File) => {
@@ -327,8 +388,13 @@ export function PhotoWatermarkPage() {
         </Field>
         <p className="rounded-[var(--radius-md)] bg-[var(--surface-2)] px-3 py-2 text-sm text-secondary">{location || '地点将显示在水印第三行'}</p>
 
-        <div className="space-y-3">
-          <p className="text-sm font-medium">三张照片 <span className="ml-2 font-normal text-xs text-secondary">有几张传几张，时间来自表格</span></p>
+        <div
+          className={`space-y-3 rounded-[var(--radius-md)] p-1 ${dragOver === 'all' ? 'bg-teal-50' : ''}`}
+          onDragOver={(event) => onDragOverZone(event, 'all')}
+          onDragLeave={() => setDragOver((current) => current === 'all' ? null : current)}
+          onDrop={onDropAll}
+        >
+          <p className="text-sm font-medium">三张照片 <span className="ml-2 font-normal text-xs text-secondary">可拖入图片，有几张传几张，时间来自表格</span></p>
           {VISITS.map((visit, index) => (
             <div key={visit.key} className="rounded-[var(--radius-md)] border p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -340,16 +406,30 @@ export function PhotoWatermarkPage() {
                   ref={(node) => { photoRefs.current[index] = node }}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
-                  onChange={(event) => setPhotoAt(index, event.target.files?.[0] ?? null)}
+                  onChange={(event) => {
+                    const images = takeImages(event.target.files ?? [])
+                    event.target.value = ''
+                    if (images.length <= 1) setPhotoAt(index, images[0] ?? null)
+                    else fillPhotos(images, index)
+                  }}
                 />
                 <button
                   type="button"
-                  className="flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed px-3 py-2 text-sm text-secondary hover:border-[var(--accent)] hover:text-accent"
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed px-3 py-2 text-sm hover:border-[var(--accent)] hover:text-accent ${
+                    dragOver === index ? 'border-[var(--accent)] bg-teal-50 text-accent' : 'text-secondary'
+                  }`}
                   onClick={() => photoRefs.current[index]?.click()}
+                  onDragOver={(event) => {
+                    event.stopPropagation()
+                    onDragOverZone(event, index)
+                  }}
+                  onDragLeave={() => setDragOver((current) => current === index ? null : current)}
+                  onDrop={(event) => onDropSlot(index, event)}
                 >
                   <ImagePlus className="h-4 w-4" />
-                  <span className="truncate">{photos[index]?.name ?? '选择照片，可不传'}</span>
+                  <span className="truncate">{photos[index]?.name ?? '拖到这里，或点选照片'}</span>
                 </button>
                 <input
                   type="date"
@@ -417,22 +497,63 @@ export function PhotoWatermarkPage() {
           <Camera className="h-4 w-4" />
           预览
           {busy && <span>正在生成…</span>}
+          {readyCount > 0 && <span>点图可放大缩小</span>}
         </div>
         {readyCount ? (
           <div className="flex gap-3 overflow-x-auto">
             {VISITS.map((visit, index) => (
               previews[index] ? (
                 <figure key={visit.key} className="w-40 shrink-0">
-                  <img src={previews[index]} alt={`${visit.title}预览`} className="h-28 w-40 rounded-[var(--radius-md)] object-cover" />
+                  <button type="button" className="block w-full" onClick={() => setViewer({ index, zoom: 1 })}>
+                    <img src={previews[index]} alt={`${visit.title}预览`} className="h-28 w-40 rounded-[var(--radius-md)] object-cover" />
+                  </button>
                   <figcaption className="mt-1 text-center text-xs text-secondary">{visit.title}</figcaption>
                 </figure>
               ) : null
             ))}
           </div>
         ) : (
-          <p className="text-sm text-secondary">选完照片后，缩略图会显示在这里</p>
+          <p className="text-sm text-secondary">把照片拖进上方格子后，缩略图会显示在这里</p>
         )}
       </section>
+
+      {viewer && previews[viewer.index] && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/72"
+          onClick={() => setViewer(null)}
+          onWheel={(event) => {
+            event.preventDefault()
+            bumpZoom(event.deltaY > 0 ? -0.15 : 0.15)
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 px-5 py-3 text-white" onClick={(event) => event.stopPropagation()}>
+            <p className="text-sm">{VISITS[viewer.index].title} · {Math.round(viewer.zoom * 100)}%</p>
+            <div className="flex items-center gap-2">
+              <button type="button" className="rounded-full bg-white/15 p-2" aria-label="缩小" onClick={() => bumpZoom(-0.25)}>
+                <ZoomOut className="h-4 w-4" />
+              </button>
+              <button type="button" className="rounded-full bg-white/15 p-2" aria-label="放大" onClick={() => bumpZoom(0.25)}>
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button type="button" className="rounded-full bg-white/15 px-3 py-2 text-sm" onClick={() => setViewer((current) => current ? { ...current, zoom: 1 } : current)}>
+                重置
+              </button>
+              <button type="button" className="rounded-full bg-white/15 p-2" aria-label="关闭预览" onClick={() => setViewer(null)}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-6">
+            <img
+              src={previews[viewer.index]}
+              alt={`${VISITS[viewer.index].title}大图`}
+              style={{ transform: `scale(${viewer.zoom})`, transformOrigin: 'center center' }}
+              className="max-h-full max-w-full rounded-md object-contain transition-transform"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </main>
   )
 }
@@ -447,6 +568,10 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       <div className="mt-1">{children}</div>
     </div>
   )
+}
+
+function clampZoom(zoom: number, delta: number) {
+  return Math.min(4, Math.max(0.4, Number((zoom + delta).toFixed(2))))
 }
 
 function toRegion(item: WatermarkEnterprise): Region {
