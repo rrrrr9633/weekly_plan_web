@@ -52,6 +52,19 @@ export function dateLine(time: CheckinTime): string {
   return `${time.year}/${pad(time.month)}/${pad(time.day)} ${weekdayOf(time)}`
 }
 
+export function fromIso(value?: string | null): CheckinTime | null {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})/.exec(value.trim())
+  if (!match) return null
+  return validTime({
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+  })
+}
+
 export function nowCheckin(): CheckinTime {
   const now = new Date()
   return {
