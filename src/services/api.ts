@@ -96,11 +96,11 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
   }
   return payload as T
 }
-async function uploadDownload(path: string, form: FormData, filename: string): Promise<void> {
+async function uploadDownload(path: string, form: FormData, filename: string, params?: Query): Promise<void> {
   const token = useAuthStore.getState().token
   const user = useAuthStore.getState().user
   const companyId = useTenantContextStore.getState().companyId
-  const response = await fetch(buildUrl(path), {
+  const response = await fetch(buildUrl(path, params), {
     method: 'POST',
     signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: {
@@ -117,12 +117,25 @@ async function uploadDownload(path: string, form: FormData, filename: string): P
     }
     throwIfFailed(response.status, payload)
   }
+  const buffer = await response.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  const isPdf = bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46
+  const wantWord = filename.toLowerCase().endsWith('.docx')
+  if (wantWord && isPdf) {
+    throw new ApiError(200, null, '服务器返回的仍是 PDF，说明线上后端还没带上 Word 导出。请重新部署后端后再试。')
+  }
   const headerName = response.headers.get('content-disposition')
   const named = headerName?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-  const objectUrl = URL.createObjectURL(await response.blob())
+  const headerFile = named ? decodeURIComponent(named) : ''
+  const downloadName = wantWord && headerFile.toLowerCase().endsWith('.pdf') ? filename : (headerFile || filename)
+  const objectUrl = URL.createObjectURL(new Blob([buffer], {
+    type: wantWord
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : (response.headers.get('content-type') || 'application/pdf'),
+  }))
   const anchor = document.createElement('a')
   anchor.href = objectUrl
-  anchor.download = named ? decodeURIComponent(named) : filename
+  anchor.download = downloadName
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
@@ -309,10 +322,9 @@ export const reportPdfApi = {
     const form = new FormData()
     form.append('word', word)
     form.append('cover', cover)
-    form.append('format', format)
     const base = word.name.replace(/\.[^.]+$/, '')
     const ext = format === 'word' ? 'docx' : 'pdf'
-    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.${ext}`)
+    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.${ext}`, { format })
   },
 }
 
