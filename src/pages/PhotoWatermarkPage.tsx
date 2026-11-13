@@ -33,10 +33,16 @@ export function PhotoWatermarkPage() {
   const [enterpriseName, setEnterpriseName] = useState('')
   const [extraPlace, setExtraPlace] = useState('')
   const [times, setTimes] = useState<CheckinTime[]>(() => [nowCheckin(), nowCheckin(), nowCheckin()])
+  const [shortcuts, setShortcuts] = useState(() => [nowCheckin(), nowCheckin(), nowCheckin()].map(formatShortcut))
   const [timeHints, setTimeHints] = useState(['', '', ''])
+  const [photos, setPhotos] = useState<(File | null)[]>([null, null, null])
+  const [previews, setPreviews] = useState<string[]>(['', '', ''])
+  const [busy, setBusy] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const photoRefs = useRef<Array<HTMLInputElement | null>>([null, null, null])
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const { data: enterprises = [], isLoading } = useQuery({
     queryKey: ['watermarkEnterprises'],
@@ -71,13 +77,54 @@ export function PhotoWatermarkPage() {
   }, [enterprises, enterpriseName, region])
 
   useEffect(() => {
-    setTimes(VISITS.map((visit) => fromIso(selectedEnterprise?.[visit.key]) ?? nowCheckin()))
+    const nextTimes = VISITS.map((visit) => fromIso(selectedEnterprise?.[visit.key]) ?? nowCheckin())
+    setTimes(nextTimes)
+    setShortcuts(nextTimes.map(formatShortcut))
     setTimeHints(VISITS.map((visit) => (
       fromIso(selectedEnterprise?.[visit.key]) ? '' : selectedEnterprise ? '表内无此时间，可手填' : ''
     )))
   }, [selectedEnterprise?.id, selectedEnterprise?.visit1At, selectedEnterprise?.visit2At, selectedEnterprise?.visit3At])
 
+  useEffect(() => {
+    setPhotos([null, null, null])
+    setPreviews(['', '', ''])
+  }, [selectedEnterprise?.id])
+
   const location = locationLine(region?.city ?? '', region?.county ?? '', enterpriseName, extraPlace)
+  const readyCount = photos.filter(Boolean).length
+
+  useEffect(() => {
+    let revoked = false
+    const render = async () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const next = ['', '', '']
+      setBusy(true)
+      try {
+        for (let index = 0; index < 3; index++) {
+          const photo = photos[index]
+          if (!photo) continue
+          const bitmap = await bitmapFromFile(photo)
+          if (revoked) {
+            bitmap.close()
+            return
+          }
+          paintPhotoWithWatermark(canvas, bitmap, {
+            time: hourMinute(times[index]),
+            dateLine: dateLine(times[index]),
+            location,
+          })
+          bitmap.close()
+          next[index] = canvas.toDataURL('image/jpeg', 0.84)
+        }
+        if (!revoked) setPreviews(next)
+      } finally {
+        if (!revoked) setBusy(false)
+      }
+    }
+    void render()
+    return () => { revoked = true }
+  }, [photos, times, location])
 
   const pickRegion = (item: Region) => {
     setRegion(item)
@@ -108,6 +155,31 @@ export function PhotoWatermarkPage() {
     }
   }
 
+  const applyTime = (index: number, next: CheckinTime) => {
+    setTimes((current) => current.map((item, itemIndex) => itemIndex === index ? next : item))
+    setShortcuts((current) => current.map((item, itemIndex) => itemIndex === index ? formatShortcut(next) : item))
+    setTimeHints((current) => current.map((item, itemIndex) => itemIndex === index ? '' : item))
+  }
+
+  const onShortcut = (index: number, value: string) => {
+    setShortcuts((current) => current.map((item, itemIndex) => itemIndex === index ? value : item))
+    const parsed = parseShortcut(value)
+    if (parsed) {
+      setTimes((current) => current.map((item, itemIndex) => itemIndex === index ? parsed : item))
+      setTimeHints((current) => current.map((item, itemIndex) => (
+        itemIndex === index ? `${dateLine(parsed)} ${hourMinute(parsed)}` : item
+      )))
+    } else if (value.replace(/\D/g, '').length >= 9) {
+      setTimeHints((current) => current.map((item, itemIndex) => (
+        itemIndex === index ? '格式应为 261023954，即 26年10月23日 9:54' : item
+      )))
+    }
+  }
+
+  const setPhotoAt = (index: number, file: File | null) => {
+    setPhotos((current) => current.map((item, itemIndex) => itemIndex === index ? file : item))
+  }
+
   const importFile = async (file?: File) => {
     if (!file) return
     setImporting(true)
@@ -123,15 +195,53 @@ export function PhotoWatermarkPage() {
     }
   }
 
+  const downloadReady = async () => {
+    const canvas = canvasRef.current
+    if (!canvas || !enterpriseName.trim() || readyCount === 0) return
+    setBusy(true)
+    try {
+      const files: { blob: Blob; name: string }[] = []
+      for (let index = 0; index < 3; index++) {
+        const photo = photos[index]
+        if (!photo) continue
+        const bitmap = await bitmapFromFile(photo)
+        paintPhotoWithWatermark(canvas, bitmap, {
+          time: hourMinute(times[index]),
+          dateLine: dateLine(times[index]),
+          location,
+        })
+        bitmap.close()
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+        if (!blob) continue
+        const base = photo.name.replace(/\.[^.]+$/, '')
+        files.push({ blob, name: `${base}-${VISITS[index].title}-打卡水印.jpg` })
+      }
+      files.forEach((file, index) => {
+        window.setTimeout(() => {
+          const url = URL.createObjectURL(file.blob)
+          const anchor = document.createElement('a')
+          anchor.href = url
+          anchor.download = file.name
+          document.body.appendChild(anchor)
+          anchor.click()
+          anchor.remove()
+          URL.revokeObjectURL(url)
+        }, index * 180)
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <main className="ml-64 min-h-screen max-w-[88rem] p-[var(--spacing-2xl)]">
+    <main className="ml-64 min-h-screen max-w-[52rem] p-[var(--spacing-2xl)]">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <Stamp className="text-accent" />
             <h2>照片加水印</h2>
           </div>
-          <p className="mt-2 text-secondary">选企业后纵向三张图，时间默认用表里的三次时间。水印仍是打卡样式，只叠时间地点。</p>
+          <p className="mt-2 text-secondary">同一页传最多三张，点一次下载已选的。时间默认用表里的三次时间。</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,text/csv" className="hidden" onChange={(event) => void importFile(event.target.files?.[0])} />
@@ -146,11 +256,11 @@ export function PhotoWatermarkPage() {
       {isLoading && <p className="mb-4 text-sm text-secondary">正在加载企业名录…</p>}
       {!isLoading && enterprises.length === 0 && (
         <p className="mb-4 rounded-[var(--radius-md)] border bg-[var(--surface-2)] px-4 py-3 text-sm text-secondary">
-          还没有企业名录。请上传带表头的清单：企业名称、市、区(县)、第一次/第二次/第三次诊断时间。诊断人员、照片内人员、报告编制日期会忽略。已有企业只在三次时间变化时更新，表里没有的旧企业不会删。
+          还没有企业名录。请上传带表头的清单：企业名称、市、区(县)、第一次/第二次/第三次诊断时间。
         </p>
       )}
 
-      <section className="card mb-6 space-y-5">
+      <section className="card space-y-5">
         <Field label="企业名称" hint="输入名称后自动带出市区">
           <div className="relative">
             <input
@@ -216,180 +326,114 @@ export function PhotoWatermarkPage() {
           <input value={extraPlace} onChange={(event) => setExtraPlace(event.target.value)} placeholder="街道或门牌，可留空" className="w-full rounded-[var(--radius-md)] border p-2" />
         </Field>
         <p className="rounded-[var(--radius-md)] bg-[var(--surface-2)] px-3 py-2 text-sm text-secondary">{location || '地点将显示在水印第三行'}</p>
+
+        <div className="space-y-3">
+          <p className="text-sm font-medium">三张照片 <span className="ml-2 font-normal text-xs text-secondary">有几张传几张，时间来自表格</span></p>
+          {VISITS.map((visit, index) => (
+            <div key={visit.key} className="rounded-[var(--radius-md)] border p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{visit.title}</p>
+                <p className="text-xs text-secondary">{visit.hint}</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <input
+                  ref={(node) => { photoRefs.current[index] = node }}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => setPhotoAt(index, event.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  className="flex min-h-10 items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed px-3 py-2 text-sm text-secondary hover:border-[var(--accent)] hover:text-accent"
+                  onClick={() => photoRefs.current[index]?.click()}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  <span className="truncate">{photos[index]?.name ?? '选择照片，可不传'}</span>
+                </button>
+                <input
+                  type="date"
+                  value={dateValue(times[index])}
+                  onChange={(event) => {
+                    const parsed = fromDateParts(event.target.value, times[index].hour, times[index].minute)
+                    if (parsed) applyTime(index, parsed)
+                  }}
+                  className="rounded-[var(--radius-md)] border p-2 text-sm"
+                />
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={times[index].hour}
+                    onChange={(event) => {
+                      const parsed = fromDateParts(dateValue(times[index]), Number(event.target.value) || 0, times[index].minute)
+                      if (parsed) applyTime(index, parsed)
+                    }}
+                    className="w-16 rounded-[var(--radius-md)] border p-2 text-sm"
+                  />
+                  <span>:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={times[index].minute}
+                    onChange={(event) => {
+                      const parsed = fromDateParts(dateValue(times[index]), times[index].hour, Number(event.target.value) || 0)
+                      if (parsed) applyTime(index, parsed)
+                    }}
+                    className="w-16 rounded-[var(--radius-md)] border p-2 text-sm"
+                  />
+                </div>
+              </div>
+              <input
+                value={shortcuts[index]}
+                onChange={(event) => onShortcut(index, event.target.value)}
+                inputMode="numeric"
+                placeholder="快捷时间 261023954"
+                className="mt-2 w-full rounded-[var(--radius-md)] border p-2 text-sm"
+              />
+              {timeHints[index] && <p className="mt-1 text-xs text-secondary">{timeHints[index]}</p>}
+              {photos[index] && (
+                <button type="button" className="mt-1 text-xs text-secondary" onClick={() => setPhotoAt(index, null)}>清除这张</button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <button
+          className="btn-primary flex w-full items-center justify-center gap-2"
+          disabled={readyCount === 0 || !enterpriseName.trim() || busy}
+          onClick={() => void downloadReady()}
+        >
+          <Download className="h-4 w-4" />
+          {readyCount ? `下载 ${readyCount} 张水印照片` : '先选照片再下载'}
+        </button>
+        <canvas ref={canvasRef} className="hidden" />
       </section>
 
-      <div className="space-y-6">
-        {VISITS.map((visit, index) => (
-          <VisitCard
-            key={`${selectedEnterprise?.id ?? 'none'}-${visit.key}`}
-            title={visit.title}
-            hint={visit.hint}
-            time={times[index]}
-            tableHint={timeHints[index]}
-            location={location}
-            canDownload={Boolean(enterpriseName.trim())}
-            onTime={(next) => setTimes((current) => current.map((item, itemIndex) => itemIndex === index ? next : item))}
-          />
-        ))}
-      </div>
-    </main>
-  )
-}
-
-function VisitCard({
-  title,
-  hint,
-  time,
-  tableHint,
-  location,
-  canDownload,
-  onTime,
-}: {
-  title: string
-  hint: string
-  time: CheckinTime
-  tableHint: string
-  location: string
-  canDownload: boolean
-  onTime: (time: CheckinTime) => void
-}) {
-  const [shortcut, setShortcut] = useState(() => formatShortcut(time))
-  const [shortcutHint, setShortcutHint] = useState('')
-  const [photo, setPhoto] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState('')
-  const [busy, setBusy] = useState(false)
-  const photoRef = useRef<HTMLInputElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    setShortcut(formatShortcut(time))
-    setShortcutHint('')
-  }, [time.year, time.month, time.day, time.hour, time.minute])
-
-  const mark = {
-    time: hourMinute(time),
-    dateLine: dateLine(time),
-    location,
-  }
-
-  useEffect(() => {
-    if (!photo) {
-      setPreviewUrl('')
-      return
-    }
-    let revoked = false
-    const render = async () => {
-      setBusy(true)
-      try {
-        const bitmap = await bitmapFromFile(photo)
-        const canvas = canvasRef.current
-        if (!canvas || revoked) {
-          bitmap.close()
-          return
-        }
-        paintPhotoWithWatermark(canvas, bitmap, mark)
-        bitmap.close()
-        if (!revoked) setPreviewUrl(canvas.toDataURL('image/jpeg', 0.84))
-      } finally {
-        if (!revoked) setBusy(false)
-      }
-    }
-    void render()
-    return () => { revoked = true }
-  }, [photo, mark.time, mark.dateLine, mark.location])
-
-  const applyTime = (next: CheckinTime) => {
-    onTime(next)
-    setShortcut(formatShortcut(next))
-    setShortcutHint('')
-  }
-
-  const onShortcut = (value: string) => {
-    setShortcut(value)
-    const parsed = parseShortcut(value)
-    if (parsed) {
-      onTime(parsed)
-      setShortcutHint(`${dateLine(parsed)} ${hourMinute(parsed)}`)
-    } else if (value.replace(/\D/g, '').length >= 9) {
-      setShortcutHint('格式应为 261023954，即 26年10月23日 9:54')
-    } else setShortcutHint('')
-  }
-
-  const download = async () => {
-    if (!photo || !canvasRef.current) return
-    const blob = await new Promise<Blob | null>((resolve) => canvasRef.current?.toBlob(resolve, 'image/jpeg', 0.92))
-    if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    const base = photo.name.replace(/\.[^.]+$/, '')
-    anchor.href = url
-    anchor.download = `${base}-${title}-打卡水印.jpg`
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <section className="card grid gap-5 xl:grid-cols-[minmax(20rem,26rem)_minmax(0,1fr)]">
-      <div className="space-y-4">
-        <div>
-          <p className="text-base font-semibold">{title}</p>
-          <p className="text-xs text-secondary">{hint}</p>
-        </div>
-        <Field label="照片">
-          <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
-          <button type="button" className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed px-3 py-8 text-sm text-secondary hover:border-[var(--accent)] hover:text-accent" onClick={() => photoRef.current?.click()}>
-            <ImagePlus className="h-5 w-5" />
-            {photo ? photo.name : '选择或拍摄照片，可不传'}
-          </button>
-        </Field>
-        <Field label="快捷时间" hint="261023954 = 2026年10月23日 09:54">
-          <input value={shortcut} onChange={(event) => onShortcut(event.target.value)} inputMode="numeric" placeholder="261023954" className="w-full rounded-[var(--radius-md)] border p-2" />
-          {(shortcutHint || tableHint) && <p className="mt-1 text-xs text-secondary">{shortcutHint || tableHint}</p>}
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="手选日期">
-            <input type="date" value={dateValue(time)} onChange={(event) => {
-              const parsed = fromDateParts(event.target.value, time.hour, time.minute)
-              if (parsed) applyTime(parsed)
-            }} className="w-full rounded-[var(--radius-md)] border p-2" />
-          </Field>
-          <Field label="时 / 分">
-            <div className="flex items-center gap-2">
-              <input type="number" min={0} max={23} value={time.hour} onChange={(event) => {
-                const parsed = fromDateParts(dateValue(time), Number(event.target.value) || 0, time.minute)
-                if (parsed) applyTime(parsed)
-              }} className="w-full rounded-[var(--radius-md)] border p-2" />
-              <span>:</span>
-              <input type="number" min={0} max={59} value={time.minute} onChange={(event) => {
-                const parsed = fromDateParts(dateValue(time), time.hour, Number(event.target.value) || 0)
-                if (parsed) applyTime(parsed)
-              }} className="w-full rounded-[var(--radius-md)] border p-2" />
-            </div>
-          </Field>
-        </div>
-        <button className="btn-primary flex w-full items-center justify-center gap-2" disabled={!photo || !canDownload || busy} onClick={() => void download()}>
-          <Download className="h-4 w-4" />
-          下载{title}水印照片
-        </button>
-      </div>
-      <div>
-        <div className="mb-3 flex items-center gap-2 text-sm text-secondary">
+      <section className="mt-6">
+        <div className="mb-2 flex items-center gap-2 text-sm text-secondary">
           <Camera className="h-4 w-4" />
-          {title}预览
+          预览
           {busy && <span>正在生成…</span>}
         </div>
-        {previewUrl ? (
-          <img src={previewUrl} alt={`${title}水印预览`} className="max-h-[36rem] w-full rounded-[var(--radius-md)] object-contain" />
-        ) : (
-          <div className="flex h-64 items-center justify-center rounded-[var(--radius-md)] bg-[var(--surface-2)] text-sm text-secondary">
-            选照片后左下角叠打卡水印，可不传
+        {readyCount ? (
+          <div className="flex gap-3 overflow-x-auto">
+            {VISITS.map((visit, index) => (
+              previews[index] ? (
+                <figure key={visit.key} className="w-40 shrink-0">
+                  <img src={previews[index]} alt={`${visit.title}预览`} className="h-28 w-40 rounded-[var(--radius-md)] object-cover" />
+                  <figcaption className="mt-1 text-center text-xs text-secondary">{visit.title}</figcaption>
+                </figure>
+              ) : null
+            ))}
           </div>
+        ) : (
+          <p className="text-sm text-secondary">选完照片后，缩略图会显示在这里</p>
         )}
-        <canvas ref={canvasRef} className="hidden" />
-      </div>
-    </section>
+      </section>
+    </main>
   )
 }
 
