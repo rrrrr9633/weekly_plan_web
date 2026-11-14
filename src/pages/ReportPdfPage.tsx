@@ -21,19 +21,24 @@ export function ReportPdfPage() {
     })
   }
 
+  const setReport = (file: File | null) => {
+    setWord(file)
+    if (file && isPdf(file)) setFormat('pdf')
+  }
+
   const applyFiles = (files: FileList | File[], prefer: 'word' | 'cover' | 'any') => {
     const list = [...files]
-    const wordFile = list.find(isWord)
+    const reportFile = list.find(isReport)
     const coverFile = list.find(isCover)
     if (prefer === 'word') {
-      if (wordFile) setWord(wordFile)
+      if (reportFile) setReport(reportFile)
       return
     }
     if (prefer === 'cover') {
       if (coverFile) onCover(coverFile)
       return
     }
-    if (wordFile) setWord(wordFile)
+    if (reportFile) setReport(reportFile)
     if (coverFile) onCover(coverFile)
   }
 
@@ -56,10 +61,11 @@ export function ReportPdfPage() {
     setBusy(true)
     setMessage('')
     try {
-      await reportPdfApi.convert(word, cover, format)
-      setMessage(format === 'word'
+      const exportFormat = isPdf(word) ? 'pdf' : format
+      await reportPdfApi.convert(word, cover, exportFormat)
+      setMessage(exportFormat === 'word'
         ? '已下载 Word：第 1 页是封面图，原来的封面页已去掉。'
-        : '已下载 PDF：第 1 页是封面图，后面是 Word 其余页。')
+        : '已下载 PDF：第 1 页是封面图，原来的第 1 页已去掉，后面页保留。')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '转换失败')
     } finally {
@@ -74,7 +80,7 @@ export function ReportPdfPage() {
           <FileDown className="text-accent" />
           <h2>报告转PDF</h2>
         </div>
-        <p className="mt-2 text-secondary">上传 Word 报告和盖章封面图。可选生成 PDF 或 Word：第 1 页换成这张图，原来的第 1 页不要，后面页保留。</p>
+        <p className="mt-2 text-secondary">上传 Word 或 PDF，再上传盖章封面图。第 1 页换成这张图，原来的第 1 页去掉，后面页保留。PDF 报告只能导出 PDF。</p>
       </header>
 
       <section
@@ -90,13 +96,13 @@ export function ReportPdfPage() {
         }}
       >
         <div>
-          <p className="text-sm font-medium">Word 报告</p>
+          <p className="text-sm font-medium">报告</p>
           <input
             ref={wordRef}
             type="file"
-            accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept=".doc,.docx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
             className="hidden"
-            onChange={(event) => setWord(event.target.files?.[0] ?? null)}
+            onChange={(event) => setReport(event.target.files?.[0] ?? null)}
           />
           <DropButton
             active={dragOver === 'word'}
@@ -106,7 +112,7 @@ export function ReportPdfPage() {
             onDrop={(event) => onDropZone(event, 'word')}
           >
             <Upload className="h-4 w-4" />
-            {word ? word.name : '拖到这里，或选择 .doc / .docx'}
+            {word ? word.name : '拖到这里，或选择 .doc / .docx / .pdf'}
           </DropButton>
         </div>
 
@@ -146,7 +152,8 @@ export function ReportPdfPage() {
             </button>
             <button
               type="button"
-              className={format === 'word' ? 'btn-primary' : 'btn-secondary'}
+              className={format === 'word' && !(word && isPdf(word)) ? 'btn-primary' : 'btn-secondary'}
+              disabled={!!word && isPdf(word)}
               onClick={() => setFormat('word')}
             >
               Word
@@ -164,8 +171,13 @@ export function ReportPdfPage() {
   )
 }
 
-function isWord(file: File) {
-  return /\.docx?$/i.test(file.name)
+function isPdf(file: File) {
+  return /\.pdf$/i.test(file.name) || file.type === 'application/pdf'
+}
+
+function isReport(file: File) {
+  return isPdf(file)
+    || /\.docx?$/i.test(file.name)
     || file.type === 'application/msword'
     || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 }
