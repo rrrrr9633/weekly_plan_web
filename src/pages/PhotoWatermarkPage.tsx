@@ -16,6 +16,7 @@ import {
 } from '@/lib/checkinTime'
 import { bitmapFromFile, paintPhotoWithWatermark } from '@/lib/checkinWatermark'
 import { locationLine, matchesQuery, regionKey, regionLabel } from '@/lib/watermarkPlace'
+import { safeFolderName, zipFolder } from '@/lib/folderZip'
 
 type Region = { key: string; city: string; county: string; label: string }
 
@@ -40,6 +41,8 @@ export function PhotoWatermarkPage() {
   const [busy, setBusy] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState('')
+  const [useCompanyFolder, setUseCompanyFolder] = useState(true)
+  const [customFolderName, setCustomFolderName] = useState('')
   const [dragOver, setDragOver] = useState<number | 'all' | null>(null)
   const [viewer, setViewer] = useState<{ index: number; zoom: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -94,6 +97,9 @@ export function PhotoWatermarkPage() {
 
   const location = locationLine(region?.city ?? '', region?.county ?? '', enterpriseName, extraPlace)
   const readyCount = photos.filter(Boolean).length
+  const folderName = safeFolderName(
+    useCompanyFolder ? enterpriseName : (customFolderName.trim() || '新建文件夹'),
+  )
 
   useEffect(() => {
     let revoked = false
@@ -274,21 +280,18 @@ export function PhotoWatermarkPage() {
         bitmap.close()
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
         if (!blob) continue
-        const base = photo.name.replace(/\.[^.]+$/, '')
-        files.push({ blob, name: `${base}-${VISITS[index].title}-打卡水印.jpg` })
+        files.push({ blob, name: `${index + 1}.jpg` })
       }
-      files.forEach((file, index) => {
-        window.setTimeout(() => {
-          const url = URL.createObjectURL(file.blob)
-          const anchor = document.createElement('a')
-          anchor.href = url
-          anchor.download = file.name
-          document.body.appendChild(anchor)
-          anchor.click()
-          anchor.remove()
-          URL.revokeObjectURL(url)
-        }, index * 180)
-      })
+      if (!files.length) return
+      const zip = await zipFolder(folderName, files)
+      const url = URL.createObjectURL(zip)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${folderName}.zip`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
     } finally {
       setBusy(false)
     }
@@ -475,13 +478,33 @@ export function PhotoWatermarkPage() {
           ))}
         </div>
 
+        <div className="space-y-2 rounded-[var(--radius-md)] border px-3 py-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={useCompanyFolder}
+              onChange={(event) => setUseCompanyFolder(event.target.checked)}
+            />
+            默认用公司名作为文件夹
+          </label>
+          {!useCompanyFolder && (
+            <input
+              value={customFolderName}
+              onChange={(event) => setCustomFolderName(event.target.value)}
+              placeholder="自命名，留空则为新建文件夹"
+              className="w-full rounded-[var(--radius-md)] border p-2 text-sm"
+            />
+          )}
+          <p className="text-xs text-secondary">将下载为「{folderName}」文件夹，照片按诊断次数命名为 1.jpg / 2.jpg / 3.jpg</p>
+        </div>
+
         <button
           className="btn-primary flex w-full items-center justify-center gap-2"
           disabled={readyCount === 0 || !enterpriseName.trim() || busy}
           onClick={() => void downloadReady()}
         >
           <Download className="h-4 w-4" />
-          {readyCount ? `下载 ${readyCount} 张水印照片` : '先选照片再下载'}
+          {readyCount ? `下载 ${folderName}（${readyCount} 张）` : '先选照片再下载'}
         </button>
         <canvas ref={canvasRef} className="hidden" />
       </section>
