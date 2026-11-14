@@ -441,28 +441,22 @@ export function PhotoWatermarkPage() {
                   className="rounded-[var(--radius-md)] border p-2 text-sm"
                 />
                 <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={0}
-                    max={23}
+                  <ClockPartInput
                     value={times[index].hour}
-                    onChange={(event) => {
-                      const parsed = fromDateParts(dateValue(times[index]), Number(event.target.value) || 0, times[index].minute)
+                    max={23}
+                    onCommit={(hour) => {
+                      const parsed = fromDateParts(dateValue(times[index]), hour, times[index].minute)
                       if (parsed) applyTime(index, parsed)
                     }}
-                    className="w-16 rounded-[var(--radius-md)] border p-2 text-sm"
                   />
                   <span>:</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
+                  <ClockPartInput
                     value={times[index].minute}
-                    onChange={(event) => {
-                      const parsed = fromDateParts(dateValue(times[index]), times[index].hour, Number(event.target.value) || 0)
+                    max={59}
+                    onCommit={(minute) => {
+                      const parsed = fromDateParts(dateValue(times[index]), times[index].hour, minute)
                       if (parsed) applyTime(index, parsed)
                     }}
-                    className="w-16 rounded-[var(--radius-md)] border p-2 text-sm"
                   />
                 </div>
               </div>
@@ -555,6 +549,55 @@ export function PhotoWatermarkPage() {
         </div>
       )}
     </main>
+  )
+}
+
+function ClockPartInput({
+  value,
+  max,
+  onCommit,
+}: {
+  value: number
+  max: number
+  onCommit: (n: number) => void
+}) {
+  const [text, setText] = useState(String(value))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setText(String(value))
+  }, [value, focused])
+
+  return (
+    <input
+      inputMode="numeric"
+      pattern="[0-9]*"
+      maxLength={2}
+      value={focused ? text : String(value)}
+      onFocus={(event) => {
+        setFocused(true)
+        setText(String(value))
+        event.target.select()
+      }}
+      onChange={(event) => {
+        const raw = event.target.value.replace(/\D/g, '').slice(0, 2)
+        setText(raw)
+        if (raw === '') return
+        const n = Number(raw)
+        if (n <= max) onCommit(n)
+      }}
+      onBlur={() => {
+        setFocused(false)
+        if (text === '') {
+          setText(String(value))
+          return
+        }
+        const n = Math.min(max, Number(text))
+        onCommit(n)
+        setText(String(n))
+      }}
+      className="w-16 rounded-[var(--radius-md)] border p-2 text-sm"
+    />
   )
 }
 
