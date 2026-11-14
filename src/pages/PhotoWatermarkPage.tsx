@@ -43,6 +43,7 @@ export function PhotoWatermarkPage() {
   const [importMessage, setImportMessage] = useState('')
   const [useCompanyFolder, setUseCompanyFolder] = useState(true)
   const [customFolderName, setCustomFolderName] = useState('')
+  const [downloadMode, setDownloadMode] = useState<'zip' | 'each'>('zip')
   const [dragOver, setDragOver] = useState<number | 'all' | null>(null)
   const [viewer, setViewer] = useState<{ index: number; zoom: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -283,15 +284,14 @@ export function PhotoWatermarkPage() {
         files.push({ blob, name: `${index + 1}.jpg` })
       }
       if (!files.length) return
-      const zip = await zipFolder(folderName, files)
-      const url = URL.createObjectURL(zip)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${folderName}.zip`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      URL.revokeObjectURL(url)
+      if (downloadMode === 'each') {
+        for (const [offset, file] of files.entries()) {
+          saveBlob(file.blob, `${folderName}-${file.name}`)
+          if (offset < files.length - 1) await wait(280)
+        }
+        return
+      }
+      saveBlob(await zipFolder(folderName, files), `${folderName}.zip`)
     } finally {
       setBusy(false)
     }
@@ -305,7 +305,7 @@ export function PhotoWatermarkPage() {
             <Stamp className="text-accent" />
             <h2>照片加水印</h2>
           </div>
-          <p className="mt-2 text-secondary">同一页传最多三张，点一次下载已选的。时间默认用表里的三次时间。</p>
+          <p className="mt-2 text-secondary">同一页传最多三张。下载前可选压缩包或一张一张保存。时间默认用表里的三次时间。</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv,text/csv" className="hidden" onChange={(event) => void importFile(event.target.files?.[0])} />
@@ -478,24 +478,49 @@ export function PhotoWatermarkPage() {
           ))}
         </div>
 
-        <div className="space-y-2 rounded-[var(--radius-md)] border px-3 py-3">
+        <div className="space-y-3 rounded-[var(--radius-md)] border px-3 py-3">
+          <p className="text-sm font-medium">下载方式</p>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="downloadMode"
+                checked={downloadMode === 'zip'}
+                onChange={() => setDownloadMode('zip')}
+              />
+              压缩包下载
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="downloadMode"
+                checked={downloadMode === 'each'}
+                onChange={() => setDownloadMode('each')}
+              />
+              一张一张下载
+            </label>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={useCompanyFolder}
               onChange={(event) => setUseCompanyFolder(event.target.checked)}
             />
-            默认用公司名作为文件夹
+            {downloadMode === 'zip' ? '默认用公司名作为文件夹' : '默认用公司名作为文件名前缀'}
           </label>
           {!useCompanyFolder && (
             <input
               value={customFolderName}
               onChange={(event) => setCustomFolderName(event.target.value)}
-              placeholder="自命名，留空则为新建文件夹"
+              placeholder={downloadMode === 'zip' ? '自命名，留空则为新建文件夹' : '自命名，留空则为水印照片'}
               className="w-full rounded-[var(--radius-md)] border p-2 text-sm"
             />
           )}
-          <p className="text-xs text-secondary">将下载为「{folderName}」文件夹，照片按诊断次数命名为 1.jpg / 2.jpg / 3.jpg</p>
+          <p className="text-xs text-secondary">
+            {downloadMode === 'zip'
+              ? `将下载为「${folderName}.zip」，照片按诊断次数命名为 1.jpg / 2.jpg / 3.jpg`
+              : `将依次下载 ${readyCount || 0} 张：${folderName}-1.jpg 起，浏览器可能会询问是否允许一次下载多张`}
+          </p>
         </div>
 
         <button
@@ -504,7 +529,9 @@ export function PhotoWatermarkPage() {
           onClick={() => void downloadReady()}
         >
           <Download className="h-4 w-4" />
-          {readyCount ? `下载 ${folderName}（${readyCount} 张）` : '先选照片再下载'}
+          {readyCount
+            ? `${downloadMode === 'zip' ? '压缩下载' : '逐张下载'} ${folderName}（${readyCount} 张）`
+            : '先选照片再下载'}
         </button>
         <canvas ref={canvasRef} className="hidden" />
       </section>
@@ -634,6 +661,21 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       <div className="mt-1">{children}</div>
     </div>
   )
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500)
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 function clampZoom(zoom: number, delta: number) {
