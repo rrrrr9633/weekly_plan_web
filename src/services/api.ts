@@ -96,50 +96,77 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
   }
   return payload as T
 }
-async function uploadDownload(path: string, form: FormData, filename: string, params?: Query): Promise<void> {
+function authHeaders(): Record<string, string> {
   const token = useAuthStore.getState().token
   const user = useAuthStore.getState().user
   const companyId = useTenantContextStore.getState().companyId
-  const response = await fetch(buildUrl(path, params), {
-    method: 'POST',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(user?.role === 'super_admin' && companyId ? { 'X-Company-Id': companyId } : {}),
-    },
-    body: form,
-  })
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null)
-    if (response.status === 401 && token && !path.startsWith('/auth/')) {
-      useAuthStore.getState().logout()
-      window.location.assign('/login?reason=session-invalid')
-    }
-    throwIfFailed(response.status, payload)
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(user?.role === 'super_admin' && companyId ? { 'X-Company-Id': companyId } : {}),
   }
-  const buffer = await response.arrayBuffer()
-  const bytes = new Uint8Array(buffer)
-  const isPdf = bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46
-  const wantWord = filename.toLowerCase().endsWith('.docx')
-  if (wantWord && isPdf) {
-    throw new ApiError(200, null, '服务器返回的仍是 PDF，说明线上后端还没带上 Word 导出。请重新部署后端后再试。')
-  }
-  const headerName = response.headers.get('content-disposition')
-  const named = headerName?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-  const headerFile = named ? decodeURIComponent(named) : ''
-  const downloadName = wantWord && headerFile.toLowerCase().endsWith('.pdf') ? filename : (headerFile || filename)
-  const objectUrl = URL.createObjectURL(new Blob([buffer], {
-    type: wantWord
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      : (response.headers.get('content-type') || 'application/pdf'),
-  }))
+}
+
+function triggerDownload(buffer: ArrayBuffer, filename: string, type: string) {
+  const objectUrl = URL.createObjectURL(new Blob([buffer], { type }))
   const anchor = document.createElement('a')
   anchor.href = objectUrl
-  anchor.download = downloadName
+  anchor.download = filename
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(objectUrl)
+}
+
+export type ReportPdfJob = {
+  id: string
+  status: string
+  progress: number
+  stage: string
+  message: string
+  filename?: string
+}
+
+async function uploadForm<T>(
+  path: string,
+  form: FormData,
+  params: Query | undefined,
+  onUpload?: (ratio: number) => void,
+): Promise<T> {
+  const token = useAuthStore.getState().token
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', buildUrl(path, params))
+    xhr.timeout = 300_000
+    const headers = authHeaders()
+    for (const [key, value] of Object.entries(headers)) xhr.setRequestHeader(key, value)
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onUpload) onUpload(event.loaded / event.total)
+    }
+    xhr.onload = () => {
+      let payload: unknown = null
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) as unknown : null
+      } catch {
+        payload = { message: '服务器返回了无法识别的结果' }
+      }
+      if (xhr.status === 401 && token && !path.startsWith('/auth/')) {
+        useAuthStore.getState().logout()
+        window.location.assign('/login?reason=session-invalid')
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        try {
+          throwIfFailed(xhr.status, payload)
+        } catch (error) {
+          reject(error)
+        }
+        return
+      }
+      resolve(payload as T)
+    }
+    xhr.onerror = () => reject(new ApiError(0, null, '上传中断，请检查网络后重试'))
+    xhr.ontimeout = () => reject(new ApiError(0, null, '上传超时。文件太大时请先转成 PDF 再上传换封面'))
+    xhr.send(form)
+  })
 }
 
 async function download(path: string, filename: string, params?: Query): Promise<void> {
@@ -318,13 +345,53 @@ export const watermarkEnterpriseApi = {
 }
 
 export const reportPdfApi = {
-  convert: (word: File, cover: File, format: 'pdf' | 'word' = 'pdf') => {
+  convert: async (
+    word: File,
+    cover: File,
+    format: 'pdf' | 'word' = 'pdf',
+    onProgress?: (job: ReportPdfJob) => void,
+  ) => {
     const form = new FormData()
     form.append('word', word)
     form.append('cover', cover)
-    const base = word.name.replace(/\.[^.]+$/, '')
-    const ext = format === 'word' ? 'docx' : 'pdf'
-    return uploadDownload('/report-pdfs/convert', form, `${base}-盖章封面.${ext}`, { format })
+    const started = await uploadForm<ReportPdfJob>(
+      '/report-pdfs/jobs',
+      form,
+      { format },
+      (ratio) => onProgress?.({
+        id: '',
+        status: 'uploading',
+        progress: Math.max(1, Math.round(ratio * 18)),
+        stage: 'uploading',
+        message: `正在上传 ${Math.round(ratio * 100)}%`,
+      }),
+    )
+    onProgress?.(started)
+    const deadline = Date.now() + 15 * 60 * 1000
+    let current = started
+    while (current.status === 'queued' || current.status === 'running') {
+      if (Date.now() > deadline) throw new ApiError(0, null, '生成超时。请把 Word 另存为 PDF 后再上传换封面。')
+      await new Promise((resolve) => window.setTimeout(resolve, 900))
+      current = await request<ReportPdfJob>('GET', `/report-pdfs/jobs/${started.id}`)
+      onProgress?.(current)
+    }
+    if (current.status === 'failed') throw new ApiError(400, current, current.message || '生成失败')
+    const token = useAuthStore.getState().token
+    const response = await fetch(buildUrl(`/report-pdfs/jobs/${started.id}/file`), {
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(300_000),
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      if (response.status === 401 && token) {
+        useAuthStore.getState().logout()
+        window.location.assign('/login?reason=session-invalid')
+      }
+      throwIfFailed(response.status, payload)
+    }
+    const buffer = await response.arrayBuffer()
+    const name = current.filename || `${word.name.replace(/\.[^.]+$/, '')}-盖章封面.${format === 'word' ? 'docx' : 'pdf'}`
+    triggerDownload(buffer, name, response.headers.get('content-type') || 'application/octet-stream')
   },
 }
 

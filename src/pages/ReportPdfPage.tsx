@@ -8,6 +8,8 @@ export function ReportPdfPage() {
   const [coverUrl, setCoverUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [progress, setProgress] = useState(0)
+  const [stage, setStage] = useState('')
   const [dragOver, setDragOver] = useState<'word' | 'cover' | null>(null)
   const [format, setFormat] = useState<'pdf' | 'word'>('pdf')
   const wordRef = useRef<HTMLInputElement>(null)
@@ -60,9 +62,15 @@ export function ReportPdfPage() {
     if (!word || !cover) return
     setBusy(true)
     setMessage('')
+    setProgress(1)
+    setStage('正在上传')
     try {
       const exportFormat = isPdf(word) ? 'pdf' : format
-      await reportPdfApi.convert(word, cover, exportFormat)
+      await reportPdfApi.convert(word, cover, exportFormat, (job) => {
+        setProgress(job.progress)
+        setStage(job.message || job.stage)
+      })
+      setProgress(100)
       setMessage(exportFormat === 'word'
         ? '已下载 Word：第 1 页是封面图，原来的封面页已去掉。'
         : '已下载 PDF：第 1 页是封面图，原来的第 1 页已去掉，后面页保留。')
@@ -112,8 +120,13 @@ export function ReportPdfPage() {
             onDrop={(event) => onDropZone(event, 'word')}
           >
             <Upload className="h-4 w-4" />
-            {word ? word.name : '拖到这里，或选择 .doc / .docx / .pdf'}
+            {word ? `${word.name}（${fileSize(word.size)}）` : '拖到这里，或选择 .doc / .docx / .pdf'}
           </DropButton>
+          {word && !isPdf(word) && word.size > 20 * 1024 * 1024 && (
+            <p className="mt-2 text-sm text-secondary">
+              这个 Word 有 {fileSize(word.size)}，服务器要把整本转成 PDF，通常要几分钟。若只换封面，建议先在电脑里另存为 PDF 再上传，会快很多。
+            </p>
+          )}
         </div>
 
         <div>
@@ -163,12 +176,25 @@ export function ReportPdfPage() {
 
         <button className="btn-primary flex w-full items-center justify-center gap-2" disabled={!word || !cover || busy} onClick={() => void convert()}>
           <Stamp className="h-4 w-4" />
-          {busy ? '正在生成，请稍候…' : format === 'word' ? '生成 Word' : '生成 PDF'}
+          {busy ? `正在生成 ${progress}%` : format === 'word' ? '生成 Word' : '生成 PDF'}
         </button>
+        {busy && (
+          <div>
+            <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
+              <div className="h-full rounded-full bg-[var(--accent)] transition-all" style={{ width: `${Math.min(100, progress)}%` }} />
+            </div>
+            <p className="mt-2 text-sm text-secondary">{stage || '处理中…'}</p>
+          </div>
+        )}
         {message && <p className="text-sm text-secondary">{message}</p>}
       </section>
     </main>
   )
+}
+
+function fileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
 function isPdf(file: File) {
